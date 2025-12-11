@@ -78,70 +78,110 @@ class _JsonViewerPageState extends State<JsonViewerPage> {
   }
 }
 
-class _JsonNode extends StatelessWidget {
+class _JsonNode extends StatefulWidget {
   final String keyName;
   final dynamic value;
 
   const _JsonNode({required this.keyName, required this.value});
 
   @override
+  State<_JsonNode> createState() => _JsonNodeState();
+}
+
+class _JsonNodeState extends State<_JsonNode> {
+  bool _isExpanded = true;
+
+  @override
   Widget build(BuildContext context) {
-    if (value is Map) {
-      final map = value as Map;
+    if (widget.value is Map) {
+      final map = widget.value as Map;
       if (map.isEmpty) {
-        return _buildLeaf(context, keyName, '{}');
+        return _buildLeaf(context, widget.keyName, '{}');
       }
-      return ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        expandedCrossAxisAlignment: CrossAxisAlignment.start,
-        expandedAlignment: Alignment.centerLeft,
-        title: Text(
-          keyName,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        //subtitle: Text('{ ${map.length} items }'),
-        initiallyExpanded: true,
-        controlAffinity: ListTileControlAffinity.leading,
-        childrenPadding: const EdgeInsets.only(left: 16.0),
-        children: map.entries.map((entry) {
+      return _buildExpandable(
+        context,
+        widget.keyName,
+        '{ ${map.length} items }',
+        map.entries.map((entry) {
           return _JsonNode(keyName: entry.key.toString(), value: entry.value);
         }).toList(),
       );
-    } else if (value is List) {
-      final list = value as List;
+    } else if (widget.value is List) {
+      final list = widget.value as List;
       if (list.isEmpty) {
-        return _buildLeaf(context, keyName, '[]');
+        return _buildLeaf(context, widget.keyName, '[]');
       }
-      return ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        expandedCrossAxisAlignment: CrossAxisAlignment.start,
-        expandedAlignment: Alignment.centerLeft,
-        title: Text(
-          keyName,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Text('[ ${list.length} items ]'),
-        initiallyExpanded: true,
-        controlAffinity: ListTileControlAffinity.leading,
-        childrenPadding: const EdgeInsets.only(left: 16.0),
-        children: list.asMap().entries.map((entry) {
+      return _buildExpandable(
+        context,
+        widget.keyName,
+        '[ ${list.length} items ]',
+        list.asMap().entries.map((entry) {
           return _JsonNode(keyName: '[${entry.key}]', value: entry.value);
         }).toList(),
       );
     } else {
-      return _buildLeaf(context, keyName, '$value');
+      return _buildLeaf(context, widget.keyName, '${widget.value}');
     }
+  }
+
+  Widget _buildExpandable(
+    BuildContext context,
+    String title,
+    String subtitle,
+    List<Widget> children,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () {
+            setState(() {
+              _isExpanded = !_isExpanded;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            child: Row(
+              children: [
+                Icon(
+                  _isExpanded ? Icons.arrow_drop_down : Icons.arrow_right,
+                  color: Colors.grey,
+                  size: 20,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  subtitle,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_isExpanded)
+          Padding(
+            padding: const EdgeInsets.only(left: 24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _buildLeaf(BuildContext context, String key, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 24.0),
       child: SelectableText.rich(
         TextSpan(
           children: [
