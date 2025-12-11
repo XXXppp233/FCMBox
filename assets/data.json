@@ -149,5 +149,25 @@
     "trashed": false,
     "time": 1699491600,
     "priority": "normal"
-  }
+  },
+  {
+  "notification": {
+    "title": "警告：退学处分倒计时",
+    "body": "距离鸭志田的改心期限仅剩 3 天。如果在 5 月 2 日前未盗取秘宝，你将遭到退学处分。请尽快确保潜入路线并发出预告信！"
+  },
+  "data": {
+    "type": "palace_deadline",
+    "target_name": "Suguru Kamoshida",
+    "palace_name": "Castle of Lust",
+    "deadline_timestamp": "1462186800",
+    "days_remaining": "3",
+    "infiltration_status": "route_not_secured",
+    "required_action": "send_calling_card",
+    "weather": "rainy"
+  },
+  "starred": true,
+  "trashed": false,
+  "time": 1461927600,
+  "priority": "high"
+}
 ]

@@ -1,10 +1,15 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:fcm_box/models/note.dart';
 import 'package:fcm_box/pages/settings_page.dart';
+import 'package:fcm_box/pages/json_viewer_page.dart';
+import 'package:fcm_box/pages/title_selection_page.dart';
+import 'package:fcm_box/pages/search_page.dart';
+import 'package:fcm_box/pages/selection_pages.dart';
 import 'package:fcm_box/theme_settings.dart';
 import 'package:fcm_box/localization.dart';
 import 'package:fcm_box/locale_settings.dart';
@@ -13,22 +18,126 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:fcm_box/services/google_drive_service.dart';
+import 'package:animations/animations.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+// import 'package:fcm_box/services/google_drive_service.dart';
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  final prefs = await SharedPreferences.getInstance();
+  final String? notesJson = prefs.getString('notes');
+  List<dynamic> data = [];
+  if (notesJson != null) {
+    data = json.decode(notesJson);
+  }
+
+  final notification = message.notification;
+  final title = notification?.title ?? 'No Title';
+  final body = notification?.body ?? 'No Body';
+
+  final dataMap = Map<String, dynamic>.from(message.data);
+  if (message.messageId != null) {
+    dataMap['_fcm_message_id'] = message.messageId;
+  }
+
+  // Use message.toMap() to preserve all original fields
+  final newNoteJson = message.toMap();
+
+  // Update/Inject our app-specific fields
+  newNoteJson['data'] = dataMap;
+
+  // Ensure notification field is a Map and has title/body (though toMap() should have it)
+  // We merge to ensure we don't lose other notification fields but also ensure title/body are correct
+  Map<String, dynamic> notificationMap = {};
+  if (newNoteJson['notification'] is Map) {
+    notificationMap = Map<String, dynamic>.from(newNoteJson['notification']);
+  }
+  notificationMap['title'] = title;
+  notificationMap['body'] = body;
+  newNoteJson['notification'] = notificationMap;
+
+  newNoteJson['starred'] = false;
+  newNoteJson['trashed'] = false;
+  newNoteJson['archived'] = false;
+  newNoteJson['time'] = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  newNoteJson['priority'] = message.data['priority'] ?? 'normal';
+
+  data.insert(0, newNoteJson);
+  await prefs.setString('notes', json.encode(data));
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'high_importance_channel', // id
+      'High Importance Notifications', // title
+      description:
+          'This channel is used for important notifications.', // description
+      importance: Importance.max,
+    );
+
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(channel);
+
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
   } catch (e) {
     debugPrint("Firebase initialization failed: $e");
+    if (kIsWeb) {
+      debugPrint(
+        "Web requires FirebaseOptions. Ensure you have configured it.",
+      );
+    }
   }
 
-  await GoogleDriveService().init();
+  // await GoogleDriveService().init();
 
   final prefs = await SharedPreferences.getInstance();
   final useMonet = prefs.getBool('use_monet') ?? false;
-  final colorValue = prefs.getInt('theme_color') ?? Colors.blue.value;
-  themeSettingsNotifier.value = ThemeSettings(useMonet, colorValue);
+  final colorValue = prefs.getInt('theme_color') ?? Colors.blue.toARGB32();
+
+  final themeModeString = prefs.getString('theme_mode') ?? 'system';
+  ThemeMode themeMode;
+  switch (themeModeString) {
+    case 'light':
+      themeMode = ThemeMode.light;
+      break;
+    case 'dark':
+      themeMode = ThemeMode.dark;
+      break;
+    default:
+      themeMode = ThemeMode.system;
+  }
+  final usePureDark = prefs.getBool('use_pure_dark') ?? false;
+
+  themeSettingsNotifier.value = ThemeSettings(
+    useMonet,
+    colorValue,
+    themeMode,
+    usePureDark,
+  );
 
   final languageCode = prefs.getString('language_code');
   if (languageCode != null) {
@@ -55,7 +164,9 @@ class MyApp extends StatelessWidget {
                 ColorScheme lightScheme;
                 ColorScheme darkScheme;
 
-                if (settings.useMonet && lightDynamic != null && darkDynamic != null) {
+                if (settings.useMonet &&
+                    lightDynamic != null &&
+                    darkDynamic != null) {
                   lightScheme = lightDynamic.harmonized();
                   darkScheme = darkDynamic.harmonized();
                 } else {
@@ -77,16 +188,23 @@ class MyApp extends StatelessWidget {
                     GlobalWidgetsLocalizations.delegate,
                     GlobalCupertinoLocalizations.delegate,
                   ],
-                  supportedLocales: const [
-                    Locale('en', ''),
-                    Locale('zh', ''),
-                  ],
+                  supportedLocales: const [Locale('en', ''), Locale('zh', '')],
+                  themeMode: settings.themeMode,
                   theme: ThemeData(
                     colorScheme: lightScheme,
+                    scaffoldBackgroundColor: const Color(0xFFF5F5F5),
                     useMaterial3: true,
                   ),
                   darkTheme: ThemeData(
-                    colorScheme: darkScheme,
+                    colorScheme: settings.usePureDark
+                        ? darkScheme.copyWith(
+                            surface: Colors.black,
+                            background: Colors.black,
+                          )
+                        : darkScheme,
+                    scaffoldBackgroundColor: settings.usePureDark
+                        ? Colors.black
+                        : null,
                     useMaterial3: true,
                   ),
                   home: const MyHomePage(title: 'FCM Box'),
@@ -118,8 +236,9 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final FocusNode _searchFocusNode = FocusNode();
   List<Note> _notes = [];
   List<Note> _filteredNotes = [];
   Set<String> _filterLabels = {}; // 'starred', 'trashed', 'archived'
@@ -134,8 +253,151 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    _loadNotes();
-    _loadSettings();
+    _searchFocusNode.canRequestFocus = false;
+    WidgetsBinding.instance.addObserver(this);
+    _initApp();
+  }
+
+  @override
+  void dispose() {
+    _searchFocusNode.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadNotes();
+    }
+  }
+
+  Future<void> _initApp() async {
+    await _requestPermissions();
+    await _loadSettings();
+    await _loadNotes();
+    _setupFCM();
+  }
+
+  Future<void> _requestPermissions() async {
+    await Permission.notification.request();
+  }
+
+  void _setupFCM() {
+    if (Firebase.apps.isEmpty) {
+      debugPrint('Firebase not initialized, skipping FCM setup.');
+      return;
+    }
+
+    // Foreground
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('Got a message whilst in the foreground!');
+      debugPrint('Message data: ${message.data}');
+
+      RemoteNotification? notification = message.notification;
+      AndroidNotification? android = message.notification?.android;
+
+      if (notification != null && android != null) {
+        flutterLocalNotificationsPlugin.show(
+          notification.hashCode,
+          notification.title,
+          notification.body,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'high_importance_channel',
+              'High Importance Notifications',
+              channelDescription:
+                  'This channel is used for important notifications.',
+              importance: Importance.max,
+              priority: Priority.high,
+              icon: '@mipmap/ic_launcher',
+            ),
+          ),
+        );
+      }
+
+      _addNoteFromMessage(message);
+    });
+
+    // Background -> Open App
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('A new onMessageOpenedApp event was published!');
+      _addNoteFromMessage(message);
+    });
+
+    // Terminated -> Open App
+    FirebaseMessaging.instance.getInitialMessage().then((
+      RemoteMessage? message,
+    ) {
+      if (message != null) {
+        debugPrint('App launched from notification');
+        _addNoteFromMessage(message);
+      }
+    });
+  }
+
+  void _addNoteFromMessage(RemoteMessage message) {
+    final messageId = message.messageId;
+    if (messageId != null) {
+      final exists = _notes.any((n) => n.data['_fcm_message_id'] == messageId);
+      if (exists) return;
+    }
+
+    final notification = message.notification;
+    final title = notification?.title ?? 'No Title';
+    final body = notification?.body ?? 'No Body';
+
+    final dataMap = Map<String, dynamic>.from(message.data);
+    if (messageId != null) {
+      dataMap['_fcm_message_id'] = messageId;
+    }
+
+    // Use message.toMap() to preserve all original fields
+    final rawMap = message.toMap();
+
+    // Update rawMap with our app-specific fields
+    rawMap['starred'] = false;
+    rawMap['trashed'] = false;
+    rawMap['archived'] = false;
+    rawMap['time'] = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    rawMap['priority'] = message.data['priority'] ?? 'normal';
+    rawMap['data'] = dataMap;
+
+    // Merge notification fields
+    Map<String, dynamic> notificationMap = {};
+    if (rawMap['notification'] is Map) {
+      notificationMap = Map<String, dynamic>.from(rawMap['notification']);
+    }
+    notificationMap['title'] = title;
+    notificationMap['body'] = body;
+    rawMap['notification'] = notificationMap;
+
+    final newNote = Note(
+      notification: NotificationInfo(title: title, body: body),
+      data: dataMap,
+      starred: false,
+      trashed: false,
+      archived: false,
+      time: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      priority: message.data['priority'] ?? 'normal',
+      rawJson: rawMap,
+    );
+
+    setState(() {
+      _notes.insert(0, newNote);
+      _applyFilters();
+    });
+    _saveNotes();
+
+    Fluttertoast.showToast(
+      msg: "New Message: $title",
+      toastLength: Toast.LENGTH_LONG,
+      gravity: ToastGravity.TOP,
+      timeInSecForIosWeb: 1,
+      backgroundColor: Colors.green,
+      textColor: Colors.white,
+      fontSize: 16.0,
+    );
   }
 
   Future<void> _loadSettings() async {
@@ -148,15 +410,55 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _loadNotes() async {
     try {
-      final String response = await rootBundle.loadString('assets/data.json');
-      final List<dynamic> data = json.decode(response);
-      setState(() {
-        _notes = data.map((json) => Note.fromJson(json)).toList();
-        _applyFilters();
-      });
+      final prefs = await SharedPreferences.getInstance();
+      final String? notesJson = prefs.getString('notes');
+      if (notesJson != null) {
+        final List<dynamic> data = json.decode(notesJson);
+        setState(() {
+          _notes = data.map((json) => Note.fromJson(json)).toList();
+          _applyFilters();
+        });
+      } else {
+        final String response = await rootBundle.loadString('assets/data.json');
+        final List<dynamic> data = json.decode(response);
+        setState(() {
+          _notes = data.map((json) => Note.fromJson(json)).toList();
+          _applyFilters();
+        });
+      }
     } catch (e) {
       debugPrint('Error loading notes: $e');
     }
+  }
+
+  Future<void> _saveNotes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String notesJson = json.encode(
+      _notes.map((n) {
+        final map = n.rawJson != null
+            ? Map<String, dynamic>.from(n.rawJson!)
+            : <String, dynamic>{};
+
+        // Handle notification merging
+        var notificationMap = <String, dynamic>{};
+        if (map['notification'] != null && map['notification'] is Map) {
+          notificationMap = Map<String, dynamic>.from(map['notification']);
+        }
+        notificationMap['title'] = n.notification.title;
+        notificationMap['body'] = n.notification.body;
+        map['notification'] = notificationMap;
+
+        map['data'] = n.data;
+        map['starred'] = n.starred;
+        map['trashed'] = n.trashed;
+        map['archived'] = n.archived;
+        map['time'] = n.time;
+        map['priority'] = n.priority;
+
+        return map;
+      }).toList(),
+    );
+    await prefs.setString('notes', notesJson);
   }
 
   void _applyFilters() {
@@ -174,7 +476,9 @@ class _MyHomePageState extends State<MyHomePage> {
         }
 
         // Priority filter
-        if (_filterPriority != null && note.priority != _filterPriority) return false;
+        if (_filterPriority != null && note.priority != _filterPriority) {
+          return false;
+        }
 
         // Time filter
         if (_filterTime != null) {
@@ -187,140 +491,26 @@ class _MyHomePageState extends State<MyHomePage> {
         }
 
         // Title filter
-        if (_filterTitle != null && note.notification.title != _filterTitle) return false;
+        if (_filterTitle != null && note.notification.title != _filterTitle) {
+          return false;
+        }
 
         return true;
       }).toList();
 
       if (_sortOption == 'time') {
-        _filteredNotes.sort((a, b) => _isReverse
-            ? a.time.compareTo(b.time)
-            : b.time.compareTo(a.time));
+        _filteredNotes.sort(
+          (a, b) =>
+              _isReverse ? a.time.compareTo(b.time) : b.time.compareTo(a.time),
+        );
       } else if (_sortOption == 'name') {
-        _filteredNotes.sort((a, b) => _isReverse
-            ? b.notification.title.compareTo(a.notification.title)
-            : a.notification.title.compareTo(b.notification.title));
+        _filteredNotes.sort(
+          (a, b) => _isReverse
+              ? b.notification.title.compareTo(a.notification.title)
+              : a.notification.title.compareTo(b.notification.title),
+        );
       }
     });
-  }
-
-  Future<Set<String>?> _showMultiSelectionSheet(
-      BuildContext context, String title, List<String> options, Set<String> selectedOptions) {
-    final bool isLarge = options.length > 5;
-    return showModalBottomSheet<Set<String>>(
-      context: context,
-      isScrollControlled: isLarge,
-      useSafeArea: true,
-      shape: isLarge
-          ? const RoundedRectangleBorder(borderRadius: BorderRadius.zero)
-          : const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return DraggableScrollableSheet(
-              expand: false,
-              initialChildSize: isLarge ? 1.0 : 0.5,
-              minChildSize: isLarge ? 1.0 : 0.5,
-              maxChildSize: 1.0,
-              builder: (context, scrollController) {
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(title,
-                              style: Theme.of(context).textTheme.titleLarge),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(context, selectedOptions);
-                            },
-                            child: Text(AppLocalizations.of(context)?.translate('done') ?? 'Done'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: scrollController,
-                        itemCount: options.length,
-                        itemBuilder: (context, index) {
-                          final option = options[index];
-                          final isSelected = selectedOptions.contains(option);
-                          return CheckboxListTile(
-                            title: Text(AppLocalizations.of(context)?.translate(option) ?? option),
-                            value: isSelected,
-                            onChanged: (bool? value) {
-                              setState(() {
-                                if (value == true) {
-                                  selectedOptions.add(option);
-                                } else {
-                                  selectedOptions.remove(option);
-                                }
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<String?> _showSelectionSheet(
-      BuildContext context, String title, List<String> options) {
-    final bool isLarge = options.length > 5;
-    return showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: isLarge,
-      useSafeArea: true,
-      shape: isLarge
-          ? const RoundedRectangleBorder(borderRadius: BorderRadius.zero)
-          : const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (BuildContext context) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: isLarge ? 1.0 : 0.5,
-          minChildSize: isLarge ? 1.0 : 0.5,
-          maxChildSize: 1.0,
-          builder: (context, scrollController) {
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(title,
-                      style: Theme.of(context).textTheme.titleLarge),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    controller: scrollController,
-                    itemCount: options.length,
-                    itemBuilder: (context, index) {
-                      final option = options[index];
-                      return ListTile(
-                        title: Text(AppLocalizations.of(context)?.translate(option) ?? option),
-                        onTap: () {
-                          Navigator.pop(context, option);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
   }
 
   Future<void> _copyFcmToken() async {
@@ -336,14 +526,17 @@ class _MyHomePageState extends State<MyHomePage> {
       await Clipboard.setData(ClipboardData(text: fcmToken));
       if (mounted) {
         Fluttertoast.showToast(
-            msg: AppLocalizations.of(context)?.translate('fcm_token_copied') ?? "FCM Token copied to clipboard",
-            toastLength: Toast.LENGTH_SHORT,
-            gravity: ToastGravity.BOTTOM,
-            timeInSecForIosWeb: 1,
-            backgroundColor: Colors.black,
-            textColor: Colors.white,
-            fontSize: 16.0,
-            webPosition: 'center');
+          msg:
+              AppLocalizations.of(context)?.translate('fcm_token_copied') ??
+              "FCM Token copied to clipboard",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          timeInSecForIosWeb: 1,
+          backgroundColor: Colors.black,
+          textColor: Colors.white,
+          fontSize: 16.0,
+          webPosition: 'center',
+        );
       }
     }
   }
@@ -359,16 +552,21 @@ class _MyHomePageState extends State<MyHomePage> {
       _applyFilters();
     });
     Fluttertoast.showToast(
-        msg: _isReverse 
-          ? (AppLocalizations.of(context)?.translate('sorted_by_time_reversed') ?? "Sorted by time, reversed") 
-          : (AppLocalizations.of(context)?.translate('sorted_by_time') ?? "Sorted by time"),
-        toastLength: Toast.LENGTH_SHORT,
-        gravity: ToastGravity.BOTTOM,
-        timeInSecForIosWeb: 1,
-        backgroundColor: Colors.black,
-        textColor: Colors.white,
-        fontSize: 16.0,
-        webPosition: 'center');
+      msg: _isReverse
+          ? (AppLocalizations.of(
+                  context,
+                )?.translate('sorted_by_time_reversed') ??
+                "Sorted by time, reversed")
+          : (AppLocalizations.of(context)?.translate('sorted_by_time') ??
+                "Sorted by time"),
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+      timeInSecForIosWeb: 1,
+      backgroundColor: Colors.black,
+      textColor: Colors.white,
+      fontSize: 16.0,
+      webPosition: 'center',
+    );
   }
 
   void _sortByName() {
@@ -382,25 +580,27 @@ class _MyHomePageState extends State<MyHomePage> {
       _applyFilters();
     });
     Fluttertoast.showToast(
-        msg: _isReverse 
-          ? (AppLocalizations.of(context)?.translate('sorted_by_name_reversed') ?? "Sorted by name, reversed") 
-          : (AppLocalizations.of(context)?.translate('sorted_by_name') ?? "Sorted by name"),
-        toastLength: Toast.LENGTH_SHORT,
-        gravity: ToastGravity.BOTTOM,
-        timeInSecForIosWeb: 1,
-        backgroundColor: Colors.black,
-        textColor: Colors.white,
-        fontSize: 16.0,
-        webPosition: 'center');
+      msg: _isReverse
+          ? (AppLocalizations.of(
+                  context,
+                )?.translate('sorted_by_name_reversed') ??
+                "Sorted by name, reversed")
+          : (AppLocalizations.of(context)?.translate('sorted_by_name') ??
+                "Sorted by name"),
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+      timeInSecForIosWeb: 1,
+      backgroundColor: Colors.black,
+      textColor: Colors.white,
+      fontSize: 16.0,
+      webPosition: 'center',
+    );
   }
-
-  
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF5F5F5),
       drawer: Drawer(
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
         child: ListView(
@@ -412,12 +612,15 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.rss_feed,
-                      size: 32,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer),
+                  Icon(
+                    Icons.rss_feed,
+                    size: 32,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
                   const SizedBox(width: 16),
                   Text(
-                    AppLocalizations.of(context)?.translate('app_title') ?? 'FCM Box',
+                    AppLocalizations.of(context)?.translate('app_title') ??
+                        'FCM Box',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onPrimaryContainer,
                       fontSize: 24,
@@ -428,7 +631,9 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             ListTile(
               leading: const Icon(Icons.inbox),
-              title: Text(AppLocalizations.of(context)?.translate('all') ?? 'All'),
+              title: Text(
+                AppLocalizations.of(context)?.translate('all') ?? 'All',
+              ),
               selected: _filterLabels.contains('all'),
               onTap: () {
                 setState(() {
@@ -443,7 +648,9 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             ListTile(
               leading: const Icon(Icons.star),
-              title: Text(AppLocalizations.of(context)?.translate('starred') ?? 'Starred'),
+              title: Text(
+                AppLocalizations.of(context)?.translate('starred') ?? 'Starred',
+              ),
               selected: _filterLabels.contains('starred'),
               onTap: () {
                 setState(() {
@@ -455,7 +662,9 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             ListTile(
               leading: const Icon(Icons.archive),
-              title: Text(AppLocalizations.of(context)?.translate('archive') ?? 'Archive'),
+              title: Text(
+                AppLocalizations.of(context)?.translate('archive') ?? 'Archive',
+              ),
               selected: _filterLabels.contains('archived'),
               onTap: () {
                 setState(() {
@@ -467,7 +676,9 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             ListTile(
               leading: const Icon(Icons.delete),
-              title: Text(AppLocalizations.of(context)?.translate('trash') ?? 'Trash'),
+              title: Text(
+                AppLocalizations.of(context)?.translate('trash') ?? 'Trash',
+              ),
               selected: _filterLabels.contains('trashed'),
               onTap: () {
                 setState(() {
@@ -480,18 +691,49 @@ class _MyHomePageState extends State<MyHomePage> {
             const Divider(),
             ListTile(
               leading: const Icon(Icons.settings),
-              title: Text(AppLocalizations.of(context)?.translate('settings') ?? 'Settings'),
+              title: Text(
+                AppLocalizations.of(context)?.translate('settings') ??
+                    'Settings',
+              ),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const SettingsPage()),
+                  MaterialPageRoute(
+                    builder: (context) => SettingsPage(
+                      onSync: () async {
+                        /*
+                        final jsonContent = json.encode(
+                          _notes
+                              .map(
+                                (n) => {
+                                  'notification': {
+                                    'title': n.notification.title,
+                                    'body': n.notification.body,
+                                  },
+                                  'data': n.data,
+                                  'starred': n.starred,
+                                  'trashed': n.trashed,
+                                  'archived': n.archived,
+                                  'time': n.time,
+                                  'priority': n.priority,
+                                },
+                              )
+                              .toList(),
+                        );
+                        await GoogleDriveService().syncData(jsonContent);
+                        */
+                      },
+                    ),
+                  ),
                 ).then((_) => _loadSettings());
               },
             ),
             ListTile(
               leading: const Icon(Icons.info),
-              title: Text(AppLocalizations.of(context)?.translate('about') ?? 'About'),
+              title: Text(
+                AppLocalizations.of(context)?.translate('about') ?? 'About',
+              ),
               onTap: () {
                 Navigator.pop(context);
               },
@@ -503,31 +745,80 @@ class _MyHomePageState extends State<MyHomePage> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: SearchBar(
-                elevation: WidgetStateProperty.all(0.0),
-                backgroundColor: WidgetStateProperty.all(Colors.white),
-                hintText: AppLocalizations.of(context)?.translate('search_hint') ?? "Search",
-                hintStyle: WidgetStateProperty.all(const TextStyle(color: Colors.grey)),
-                side: WidgetStateProperty.resolveWith<BorderSide>(
-                  (Set<WidgetState> states) {
-                    if (states.contains(WidgetState.focused)) {
-                      return BorderSide(
-                        color: Theme.of(context).colorScheme.primary,
-                        width: 2.0,
-                      );
-                    }
-                    return BorderSide.none;
-                  },
-                ),
-                leading: IconButton(
-                  icon: const Icon(Icons.menu, color: Colors.black54),
-                  onPressed: () {
-                    _scaffoldKey.currentState?.openDrawer();
-                  },
-                ),
-                trailing: [
-                  //const SizedBox(width: 4),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.menu,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white70
+                          : Colors.black54,
+                    ),
+                    onPressed: () {
+                      _scaffoldKey.currentState?.openDrawer();
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OpenContainer(
+                      transitionType: ContainerTransitionType.fade,
+                      openBuilder: (BuildContext context, VoidCallback _) {
+                        return const SearchPage();
+                      },
+                      tappable: false,
+                      closedElevation: 0,
+                      closedShape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(28)),
+                      ),
+                      closedColor:
+                          Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[900]!
+                          : Colors.white,
+                      closedBuilder:
+                          (BuildContext context, VoidCallback openContainer) {
+                            return SearchBar(
+                              focusNode: _searchFocusNode,
+                              elevation: WidgetStateProperty.all(0.0),
+                              backgroundColor: WidgetStateProperty.all(
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.grey[900]
+                                    : Colors.white,
+                              ),
+                              hintText:
+                                  AppLocalizations.of(
+                                    context,
+                                  )?.translate('search_hint') ??
+                                  "Search",
+                              hintStyle: WidgetStateProperty.all(
+                                const TextStyle(color: Colors.grey),
+                              ),
+                              side: WidgetStateProperty.resolveWith<BorderSide>(
+                                (Set<WidgetState> states) {
+                                  if (states.contains(WidgetState.focused)) {
+                                    return BorderSide(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      width: 2.0,
+                                    );
+                                  }
+                                  return BorderSide.none;
+                                },
+                              ),
+                              leading: const Icon(
+                                Icons.search,
+                                color: Colors.grey,
+                              ),
+                              onTap: openContainer,
+                            );
+                          },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
                   InkWell(
                     onTap: () {
                       // print("点击头像");
@@ -536,46 +827,69 @@ class _MyHomePageState extends State<MyHomePage> {
                     child: const CircleAvatar(
                       radius: 16,
                       backgroundColor: Colors.purple,
-                      child: Text("G", style: TextStyle(color: Colors.white, fontSize: 14)),
+                      child: Text(
+                        "G",
+                        style: TextStyle(color: Colors.white, fontSize: 14),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
                 ],
-                onTap: () {
-                  // print("打开搜索页面");
-                },
-                onChanged: (value) {
-                  // print("输入内容: $value");
-                },
               ),
             ),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 8.0),
+              padding: const EdgeInsets.only(
+                left: 16.0,
+                right: 16.0,
+                bottom: 8.0,
+              ),
               child: Row(
                 children: [
                   Padding(
                     padding: const EdgeInsets.only(right: 8.0),
                     child: FilterChip(
                       label: _filterLabels.isEmpty
-                          ? Text(AppLocalizations.of(context)?.translate('label') ?? 'Label')
-                          : Text('${AppLocalizations.of(context)?.translate('label_prefix') ?? 'Label: '}${_filterLabels.map((l) => AppLocalizations.of(context)?.translate(l) ?? l).join(', ')}'),
-                          
+                          ? Text(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('label') ??
+                                  'Label',
+                            )
+                          : Text(
+                              '${AppLocalizations.of(context)?.translate('label_prefix') ?? 'Label: '}${_filterLabels.map((l) => AppLocalizations.of(context)?.translate(l) ?? l).join(', ')}',
+                            ),
                       selected: _filterLabels.isNotEmpty,
-                      backgroundColor: Colors.white,
-                      selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                      backgroundColor:
+                          Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[900]
+                          : Colors.white,
+                      selectedColor: Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer,
                       side: _filterLabels.isNotEmpty
                           ? BorderSide(
                               color: Theme.of(context).colorScheme.primary,
                             )
                           : const BorderSide(color: Colors.grey, width: 0.5),
                       onSelected: (bool value) async {
-                        final Set<String>? selected = await _showMultiSelectionSheet(
-                          context,
-                          AppLocalizations.of(context)?.translate('select_label') ?? 'Select Label',
-                          ['starred', 'trashed', 'archived'],
-                          Set.from(_filterLabels),
-                        );
+                        final selected =
+                            await showModalBottomSheet<Set<String>>(
+                              context: context,
+                              isScrollControlled: true,
+                              builder: (context) => MultiSelectionPage(
+                                title:
+                                    AppLocalizations.of(
+                                      context,
+                                    )?.translate('select_label') ??
+                                    'Select Label',
+                                options: const [
+                                  'starred',
+                                  'trashed',
+                                  'archived',
+                                ],
+                                selectedOptions: _filterLabels,
+                              ),
+                            );
                         if (selected != null) {
                           setState(() {
                             _filterLabels = selected;
@@ -588,12 +902,22 @@ class _MyHomePageState extends State<MyHomePage> {
                   Padding(
                     padding: const EdgeInsets.only(right: 8.0),
                     child: FilterChip(
-                      label: Text(_filterPriority == null 
-                        ? (AppLocalizations.of(context)?.translate('priority') ?? 'Priority') 
-                        : '${AppLocalizations.of(context)?.translate('priority_prefix') ?? 'Priority: '}${AppLocalizations.of(context)?.translate(_filterPriority!) ?? _filterPriority}'),
+                      label: Text(
+                        _filterPriority == null
+                            ? (AppLocalizations.of(
+                                    context,
+                                  )?.translate('priority') ??
+                                  'Priority')
+                            : '${AppLocalizations.of(context)?.translate('priority_prefix') ?? 'Priority: '}${AppLocalizations.of(context)?.translate(_filterPriority!) ?? _filterPriority}',
+                      ),
                       selected: _filterPriority != null,
-                      backgroundColor: Colors.white,
-                      selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                      backgroundColor:
+                          Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[900]
+                          : Colors.white,
+                      selectedColor: Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer,
                       side: _filterPriority != null
                           ? BorderSide(
                               color: Theme.of(context).colorScheme.primary,
@@ -605,18 +929,26 @@ class _MyHomePageState extends State<MyHomePage> {
                             _filterPriority = null;
                             _applyFilters();
                           });
-                          return;
-                        }
-                        final String? selected = await _showSelectionSheet(
-                          context,
-                          AppLocalizations.of(context)?.translate('select_priority') ?? 'Select Priority',
-                          ['high', 'normal', 'low'],
-                        );
-                        if (selected != null) {
-                          setState(() {
-                            _filterPriority = selected;
-                            _applyFilters();
-                          });
+                        } else {
+                          final selected = await showModalBottomSheet<String>(
+                            context: context,
+                            isScrollControlled: true,
+                            builder: (context) => GenericSelectionPage(
+                              title:
+                                  AppLocalizations.of(
+                                    context,
+                                  )?.translate('select_priority') ??
+                                  'Select Priority',
+                              options: const ['high', 'normal', 'low'],
+                              selectedOption: _filterPriority,
+                            ),
+                          );
+                          if (selected != null) {
+                            setState(() {
+                              _filterPriority = selected;
+                              _applyFilters();
+                            });
+                          }
                         }
                       },
                     ),
@@ -624,12 +956,22 @@ class _MyHomePageState extends State<MyHomePage> {
                   Padding(
                     padding: const EdgeInsets.only(right: 8.0),
                     child: FilterChip(
-                      label: Text(_filterTime == null 
-                        ? (AppLocalizations.of(context)?.translate('time') ?? 'Time') 
-                        : '${AppLocalizations.of(context)?.translate('time_prefix') ?? 'Time: '}${AppLocalizations.of(context)?.translate(_filterTime!.replaceAll(' ', '_')) ?? _filterTime}'),
+                      label: Text(
+                        _filterTime == null
+                            ? (AppLocalizations.of(
+                                    context,
+                                  )?.translate('time') ??
+                                  'Time')
+                            : '${AppLocalizations.of(context)?.translate('time_prefix') ?? 'Time: '}${AppLocalizations.of(context)?.translate(_filterTime!.replaceAll(' ', '_')) ?? _filterTime}',
+                      ),
                       selected: _filterTime != null,
-                      backgroundColor: Colors.white,
-                      selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                      backgroundColor:
+                          Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[900]
+                          : Colors.white,
+                      selectedColor: Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer,
                       side: _filterTime != null
                           ? BorderSide(
                               color: Theme.of(context).colorScheme.primary,
@@ -641,18 +983,26 @@ class _MyHomePageState extends State<MyHomePage> {
                             _filterTime = null;
                             _applyFilters();
                           });
-                          return;
-                        }
-                        final String? selected = await _showSelectionSheet(
-                          context,
-                          AppLocalizations.of(context)?.translate('select_time') ?? 'Select Time',
-                          ['1 week', '1 month', '3 months'],
-                        );
-                        if (selected != null) {
-                          setState(() {
-                            _filterTime = selected;
-                            _applyFilters();
-                          });
+                        } else {
+                          final selected = await showModalBottomSheet<String>(
+                            context: context,
+                            isScrollControlled: true,
+                            builder: (context) => GenericSelectionPage(
+                              title:
+                                  AppLocalizations.of(
+                                    context,
+                                  )?.translate('select_time') ??
+                                  'Select Time',
+                              options: const ['1 week', '1 month', '3 months'],
+                              selectedOption: _filterTime,
+                            ),
+                          );
+                          if (selected != null) {
+                            setState(() {
+                              _filterTime = selected;
+                              _applyFilters();
+                            });
+                          }
                         }
                       },
                     ),
@@ -660,12 +1010,22 @@ class _MyHomePageState extends State<MyHomePage> {
                   Padding(
                     padding: const EdgeInsets.only(right: 8.0),
                     child: FilterChip(
-                      label: Text(_filterTitle == null 
-                        ? (AppLocalizations.of(context)?.translate('title') ?? 'Title') 
-                        : '${AppLocalizations.of(context)?.translate('title_prefix') ?? 'Title: '}$_filterTitle'),
+                      label: Text(
+                        _filterTitle == null
+                            ? (AppLocalizations.of(
+                                    context,
+                                  )?.translate('title') ??
+                                  'Title')
+                            : '${AppLocalizations.of(context)?.translate('title_prefix') ?? 'Title: '}$_filterTitle',
+                      ),
                       selected: _filterTitle != null,
-                      backgroundColor: Colors.white,
-                      selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                      backgroundColor:
+                          Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[900]
+                          : Colors.white,
+                      selectedColor: Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer,
                       side: _filterTitle != null
                           ? BorderSide(
                               color: Theme.of(context).colorScheme.primary,
@@ -677,19 +1037,26 @@ class _MyHomePageState extends State<MyHomePage> {
                             _filterTitle = null;
                             _applyFilters();
                           });
-                          return;
-                        }
-                        final titles = _notes.map((n) => n.notification.title).toSet().toList();
-                        final String? selected = await _showSelectionSheet(
-                          context,
-                          AppLocalizations.of(context)?.translate('select_title') ?? 'Select Title',
-                          titles,
-                        );
-                        if (selected != null) {
-                          setState(() {
-                            _filterTitle = selected;
-                            _applyFilters();
-                          });
+                        } else {
+                          final titles = _notes
+                              .map((n) => n.notification.title)
+                              .toSet()
+                              .toList();
+                          final selected = await Navigator.push<String>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TitleSelectionPage(
+                                allTitles: titles,
+                                selectedTitle: _filterTitle,
+                              ),
+                            ),
+                          );
+                          if (selected != null) {
+                            setState(() {
+                              _filterTitle = selected;
+                              _applyFilters();
+                            });
+                          }
                         }
                       },
                     ),
@@ -703,12 +1070,30 @@ class _MyHomePageState extends State<MyHomePage> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   _sortOption == 'time'
-                      ? (_isReverse ? "Sorted by time, reversed" : "Sorted by time")
-                      : (_isReverse ? "Sorted by name, reversed" : "Sorted by name"),
+                      ? (_isReverse
+                            ? (AppLocalizations.of(
+                                    context,
+                                  )?.translate('sorted_by_time_reversed') ??
+                                  "Sorted by time, reversed")
+                            : (AppLocalizations.of(
+                                    context,
+                                  )?.translate('sorted_by_time') ??
+                                  "Sorted by time"))
+                      : (_isReverse
+                            ? (AppLocalizations.of(
+                                    context,
+                                  )?.translate('sorted_by_name_reversed') ??
+                                  "Sorted by name, reversed")
+                            : (AppLocalizations.of(
+                                    context,
+                                  )?.translate('sorted_by_name') ??
+                                  "Sorted by name")),
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[400]
+                        : Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -720,20 +1105,28 @@ class _MyHomePageState extends State<MyHomePage> {
                   return Dismissible(
                     key: Key(note.data['note_id'] ?? note.notification.title),
                     background: Container(
-                      color: _leftSwipeAction == 'archive' ? Colors.green : Colors.red,
+                      color: _leftSwipeAction == 'archive'
+                          ? Colors.green
+                          : Colors.red,
                       alignment: Alignment.centerLeft,
                       padding: const EdgeInsets.only(left: 20.0),
                       child: Icon(
-                        _leftSwipeAction == 'archive' ? Icons.archive : Icons.delete,
+                        _leftSwipeAction == 'archive'
+                            ? Icons.archive
+                            : Icons.delete,
                         color: Colors.white,
                       ),
                     ),
                     secondaryBackground: Container(
-                      color: _rightSwipeAction == 'archive' ? Colors.green : Colors.red,
+                      color: _rightSwipeAction == 'archive'
+                          ? Colors.green
+                          : Colors.red,
                       alignment: Alignment.centerRight,
                       padding: const EdgeInsets.only(right: 20.0),
                       child: Icon(
-                        _rightSwipeAction == 'archive' ? Icons.archive : Icons.delete,
+                        _rightSwipeAction == 'archive'
+                            ? Icons.archive
+                            : Icons.delete,
                         color: Colors.white,
                       ),
                     ),
@@ -746,47 +1139,75 @@ class _MyHomePageState extends State<MyHomePage> {
                         final index = _notes.indexOf(note);
                         if (index != -1) {
                           if (action == 'archive') {
-                            _notes[index] = note.copyWith(archived: !note.archived);
+                            _notes[index] = note.copyWith(
+                              archived: !note.archived,
+                            );
                           } else {
-                            _notes[index] = note.copyWith(trashed: !note.trashed);
+                            _notes[index] = note.copyWith(
+                              trashed: !note.trashed,
+                            );
                           }
                           _applyFilters();
+                          _saveNotes();
                         }
                       });
-                      
+
                       String message;
                       if (action == 'archive') {
-                        message = note.archived 
-                          ? (AppLocalizations.of(context)?.translate('unarchived_message') ?? 'Unarchived')
-                          : (AppLocalizations.of(context)?.translate('archived_message') ?? 'Archived');
+                        message = note.archived
+                            ? (AppLocalizations.of(
+                                    context,
+                                  )?.translate('unarchived_message') ??
+                                  'Unarchived')
+                            : (AppLocalizations.of(
+                                    context,
+                                  )?.translate('archived_message') ??
+                                  'Archived');
                       } else {
                         message = note.trashed
-                          ? (AppLocalizations.of(context)?.translate('restored_message') ?? 'Restored')
-                          : (AppLocalizations.of(context)?.translate('deleted_message') ?? 'Deleted');
+                            ? (AppLocalizations.of(
+                                    context,
+                                  )?.translate('restored_message') ??
+                                  'Restored')
+                            : (AppLocalizations.of(
+                                    context,
+                                  )?.translate('deleted_message') ??
+                                  'Deleted');
                       }
 
+                      ScaffoldMessenger.of(context).clearSnackBars();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('$message ${note.notification.title}'),
                           action: SnackBarAction(
-                            label: AppLocalizations.of(context)?.translate('undo') ?? 'Undo',
+                            label:
+                                AppLocalizations.of(
+                                  context,
+                                )?.translate('undo') ??
+                                'Undo',
                             textColor: Theme.of(context).colorScheme.primary,
                             onPressed: () {
                               setState(() {
-                                final index = _notes.indexWhere((n) =>
-                                    n.data['note_id'] == note.data['note_id'] &&
-                                    n.notification.title ==
-                                        note.notification.title &&
-                                    n.time == note.time);
+                                final index = _notes.indexWhere(
+                                  (n) =>
+                                      n.data['note_id'] ==
+                                          note.data['note_id'] &&
+                                      n.notification.title ==
+                                          note.notification.title &&
+                                      n.time == note.time,
+                                );
                                 if (index != -1) {
                                   if (action == 'archive') {
-                                    _notes[index] = _notes[index]
-                                        .copyWith(archived: !_notes[index].archived);
+                                    _notes[index] = _notes[index].copyWith(
+                                      archived: !_notes[index].archived,
+                                    );
                                   } else {
-                                    _notes[index] = _notes[index]
-                                        .copyWith(trashed: !_notes[index].trashed);
+                                    _notes[index] = _notes[index].copyWith(
+                                      trashed: !_notes[index].trashed,
+                                    );
                                   }
                                   _applyFilters();
+                                  _saveNotes();
                                 }
                               });
                             },
@@ -797,12 +1218,23 @@ class _MyHomePageState extends State<MyHomePage> {
                     child: _NoteCard(
                       note: note,
                       onTap: () {},
+                      onLongPress: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => JsonViewerPage(note: note),
+                          ),
+                        );
+                      },
                       onToggleStar: () {
                         setState(() {
                           final index = _notes.indexOf(note);
                           if (index != -1) {
-                            _notes[index] = note.copyWith(starred: !note.starred);
+                            _notes[index] = note.copyWith(
+                              starred: !note.starred,
+                            );
                             _applyFilters();
+                            _saveNotes();
                           }
                         });
                       },
@@ -820,16 +1252,17 @@ class _MyHomePageState extends State<MyHomePage> {
         spacing: 3,
         childPadding: const EdgeInsets.all(5),
         spaceBetweenChildren: 4,
-        overlayColor: Theme.of(context).brightness == Brightness.light
-            ? Colors.grey[900]
-            : Colors.grey[300],
+        overlayColor: Colors.grey[900],
         overlayOpacity: 0.5,
         children: [
           SpeedDialChild(
             labelWidget: FloatingActionButton.extended(
               onPressed: _copyFcmToken,
               icon: const Icon(Icons.copy),
-              label: Text(AppLocalizations.of(context)?.translate('copy_fcm_token') ?? 'Copy FCM Token'),
+              label: Text(
+                AppLocalizations.of(context)?.translate('copy_fcm_token') ??
+                    'Copy FCM Token',
+              ),
               key: const Key('copy_fcm_token'),
             ),
           ),
@@ -837,14 +1270,20 @@ class _MyHomePageState extends State<MyHomePage> {
             labelWidget: FloatingActionButton.extended(
               onPressed: _sortByDate,
               icon: const Icon(Icons.sort),
-              label: Text(AppLocalizations.of(context)?.translate('sort_by_time') ?? 'Sort by time'),
+              label: Text(
+                AppLocalizations.of(context)?.translate('sort_by_time') ??
+                    'Sort by time',
+              ),
             ),
           ),
           SpeedDialChild(
             labelWidget: FloatingActionButton.extended(
               onPressed: _sortByName,
               icon: const Icon(Icons.sort_by_alpha),
-              label: Text(AppLocalizations.of(context)?.translate('sort_by_name') ?? 'Sort by name'),
+              label: Text(
+                AppLocalizations.of(context)?.translate('sort_by_name') ??
+                    'Sort by name',
+              ),
             ),
           ),
         ],
@@ -857,13 +1296,14 @@ class _NoteCard extends StatefulWidget {
   final Note note;
   final VoidCallback onToggleStar;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const _NoteCard({
-    Key? key,
     required this.note,
     required this.onToggleStar,
     required this.onTap,
-  }) : super(key: key);
+    this.onLongPress,
+  });
 
   @override
   State<_NoteCard> createState() => _NoteCardState();
@@ -875,13 +1315,14 @@ class _NoteCardState extends State<_NoteCard> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final borderColor = (_isHovered || _isPressed)
         ? Theme.of(context).colorScheme.primary
-        : const Color(0xFFE0E0E0);
+        : (isDark ? Colors.grey[700]! : const Color(0xFFE0E0E0));
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-      color: Colors.white,
+      color: isDark ? Colors.grey[900] : Colors.white,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12.0),
@@ -890,6 +1331,7 @@ class _NoteCardState extends State<_NoteCard> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12.0),
         onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
         onHover: (val) {
           if (mounted) setState(() => _isHovered = val);
         },
@@ -931,11 +1373,11 @@ class _NoteCardState extends State<_NoteCard> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                      DateTime.fromMillisecondsSinceEpoch(widget.note.time * 1000)
-                          .toString()
-                          .split(' ')[0]
-                          .replaceAll('-', '/'),
-                      style: const TextStyle(fontSize: 12)),
+                    DateTime.fromMillisecondsSinceEpoch(
+                      widget.note.time * 1000,
+                    ).toString().split(' ')[0].replaceAll('-', '/'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   const SizedBox(height: 8),
                   IconButton(
                     padding: EdgeInsets.zero,

@@ -6,6 +6,7 @@ class Note {
   final bool archived;
   final int time;
   final String priority;
+  final Map<String, dynamic>? rawJson;
 
   Note({
     required this.notification,
@@ -15,6 +16,7 @@ class Note {
     required this.archived,
     required this.time,
     required this.priority,
+    this.rawJson,
   });
 
   factory Note.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class Note {
       archived: json['archived'] ?? false,
       time: json['time'] ?? 0,
       priority: json['priority'] ?? 'normal',
+      rawJson: json,
     );
   }
 
@@ -37,6 +40,7 @@ class Note {
     bool? archived,
     int? time,
     String? priority,
+    Map<String, dynamic>? rawJson,
   }) {
     return Note(
       notification: notification ?? this.notification,
@@ -46,6 +50,7 @@ class Note {
       archived: archived ?? this.archived,
       time: time ?? this.time,
       priority: priority ?? this.priority,
+      rawJson: rawJson ?? this.rawJson,
     );
   }
 }

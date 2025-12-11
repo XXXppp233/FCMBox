@@ -1,4 +1,4 @@
-package com.example.fcm_box
+package com.XXXppp233.FCMBox
 
 import io.flutter.embedding.android.FlutterActivity
 

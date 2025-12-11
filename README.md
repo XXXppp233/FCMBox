@@ -1,16 +1,12 @@
-# fcm_box
+# FCM Box
 
-A new Flutter project.
+A Flutter project could recevie FCM from custom Project.
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+- You can build this app with your keystore to avoid Play Store alert.
+- Modify the app name and register it on firebase console to get a fcmxxxxx.json
+- Get the device FCM token on the app
+- Use fcmxxxxx.json and your FCM token to send FCM from your Project to your device.
 
-A few resources to get you started if this is your first Flutter project:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
