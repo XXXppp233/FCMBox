@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:fcm_box/models/note.dart';
 import 'package:fcm_box/pages/settings_page.dart';
+import 'package:fcm_box/pages/about_page.dart';
 import 'package:fcm_box/pages/json_viewer_page.dart';
 import 'package:fcm_box/pages/title_selection_page.dart';
 import 'package:fcm_box/pages/search_page.dart';
@@ -247,6 +247,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   String _rightSwipeAction = 'delete';
   String _sortOption = 'time';
   bool _isReverse = false;
+  final ValueNotifier<bool> _isDialOpen = ValueNotifier(false);
 
   @override
   void initState() {
@@ -387,15 +388,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
     _saveNotes();
 
-    Fluttertoast.showToast(
-      msg: "New Message: $title",
-      toastLength: Toast.LENGTH_LONG,
-      gravity: ToastGravity.TOP,
-      timeInSecForIosWeb: 1,
-      backgroundColor: Colors.green,
-      textColor: Colors.white,
-      fontSize: 16.0,
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("New Message: $title"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -533,17 +534,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (fcmToken != null) {
       await Clipboard.setData(ClipboardData(text: fcmToken));
       if (mounted) {
-        Fluttertoast.showToast(
-          msg:
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
               AppLocalizations.of(context)?.translate('fcm_token_copied') ??
-              "FCM Token copied to clipboard",
-          toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.BOTTOM,
-          timeInSecForIosWeb: 1,
-          backgroundColor: Colors.black,
-          textColor: Colors.white,
-          fontSize: 16.0,
-          webPosition: 'center',
+                  "FCM Token copied to clipboard",
+            ),
+          ),
         );
       }
     }
@@ -559,21 +557,19 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       }
       _applyFilters();
     });
-    Fluttertoast.showToast(
-      msg: _isReverse
-          ? (AppLocalizations.of(
-                  context,
-                )?.translate('sorted_by_time_reversed') ??
-                "Sorted by time, reversed")
-          : (AppLocalizations.of(context)?.translate('sorted_by_time') ??
-                "Sorted by time"),
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      timeInSecForIosWeb: 1,
-      backgroundColor: Colors.black,
-      textColor: Colors.white,
-      fontSize: 16.0,
-      webPosition: 'center',
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _isReverse
+              ? (AppLocalizations.of(
+                      context,
+                    )?.translate('sorted_by_time_reversed') ??
+                    "Sorted by time, reversed")
+              : (AppLocalizations.of(context)?.translate('sorted_by_time') ??
+                    "Sorted by time"),
+        ),
+      ),
     );
   }
 
@@ -587,21 +583,19 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       }
       _applyFilters();
     });
-    Fluttertoast.showToast(
-      msg: _isReverse
-          ? (AppLocalizations.of(
-                  context,
-                )?.translate('sorted_by_name_reversed') ??
-                "Sorted by name, reversed")
-          : (AppLocalizations.of(context)?.translate('sorted_by_name') ??
-                "Sorted by name"),
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      timeInSecForIosWeb: 1,
-      backgroundColor: Colors.black,
-      textColor: Colors.white,
-      fontSize: 16.0,
-      webPosition: 'center',
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _isReverse
+              ? (AppLocalizations.of(
+                      context,
+                    )?.translate('sorted_by_name_reversed') ??
+                    "Sorted by name, reversed")
+              : (AppLocalizations.of(context)?.translate('sorted_by_name') ??
+                    "Sorted by name"),
+        ),
+      ),
     );
   }
 
@@ -744,6 +738,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               ),
               onTap: () {
                 Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AboutPage()),
+                );
               },
             ),
           ],
@@ -1278,6 +1276,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         ),
       ),
       floatingActionButton: SpeedDial(
+        openCloseDial: _isDialOpen,
         icon: Icons.settings,
         activeIcon: Icons.close,
         spacing: 3,
@@ -1288,7 +1287,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         children: [
           SpeedDialChild(
             labelWidget: FloatingActionButton.extended(
-              onPressed: _copyFcmToken,
+              onPressed: () {
+                _copyFcmToken();
+                _isDialOpen.value = false;
+              },
               icon: const Icon(Icons.copy),
               label: Text(
                 AppLocalizations.of(context)?.translate('copy_fcm_token') ??
