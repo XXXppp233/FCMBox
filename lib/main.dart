@@ -1147,11 +1147,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                         final index = _notes.indexOf(note);
                         if (index != -1) {
                           if (action == 'archive') {
+                            _notes[index] = note.copyWith(trashed: 0);
                             _notes[index] = note.copyWith(
                               archived: !note.archived,
                             );
                           } else {
-                            if (note.trashed > 0) {
+                            if (note.trashed != 0) {
                               _notes[index] = note.copyWith(trashed: 0);
                             } else {
                               _notes[index] = note.copyWith(
@@ -1170,15 +1171,23 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
                       String message;
                       if (action == 'archive') {
-                        message = note.archived
-                            ? (AppLocalizations.of(
-                                    context,
-                                  )?.translate('unarchived_message') ??
-                                  'Unarchived')
-                            : (AppLocalizations.of(
-                                    context,
-                                  )?.translate('archived_message') ??
-                                  'Archived');
+                        if (note.trashed > 0) {
+                          message =
+                              AppLocalizations.of(
+                                context,
+                              )?.translate('restored_message') ??
+                              'Restored';
+                        } else {
+                          message = note.archived
+                              ? (AppLocalizations.of(
+                                      context,
+                                    )?.translate('unarchived_message') ??
+                                    'Unarchived')
+                              : (AppLocalizations.of(
+                                      context,
+                                    )?.translate('archived_message') ??
+                                    'Archived');
+                        }
                       } else {
                         message = note.trashed > 0
                             ? (AppLocalizations.of(
