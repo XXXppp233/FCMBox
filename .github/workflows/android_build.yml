@@ -38,10 +38,10 @@ jobs:
           fi
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --target-platform android-arm64
 
       - name: Build App Bundle
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release 
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
