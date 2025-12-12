@@ -45,6 +45,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (message.messageId != null) {
     dataMap['_fcm_message_id'] = message.messageId;
   }
+  // Stable per-entry id used by UI keys/undo. Persist it in stored JSON.
+  dataMap['_local_note_id'] =
+      (message.messageId != null && message.messageId!.isNotEmpty)
+      ? message.messageId
+      : DateTime.now().microsecondsSinceEpoch.toString();
 
   // Use message.toMap() to preserve all original fields
   final newNoteJson = message.toMap();
@@ -239,6 +244,35 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   final FocusNode _searchFocusNode = FocusNode();
   List<Note> _notes = [];
   List<Note> _filteredNotes = [];
+
+  String _noteStableId(Note note) {
+    final id = note.data['_local_note_id'];
+    if (id is String && id.isNotEmpty) return id;
+    final fcmId = note.data['_fcm_message_id'];
+    if (fcmId is String && fcmId.isNotEmpty) return fcmId;
+    // Legacy fallback (should become unused once ids are persisted by _saveNotes()).
+    return '${note.time}:${note.notification.title}:${note.notification.body}';
+  }
+
+  void _ensureLocalNoteIds() {
+    final used = <String>{};
+    for (var i = 0; i < _notes.length; i++) {
+      final note = _notes[i];
+      final current = note.data['_local_note_id'];
+      final currentId = (current is String) ? current : '';
+
+      if (currentId.isEmpty || used.contains(currentId)) {
+        final newData = Map<String, dynamic>.from(note.data);
+        final newId = '${DateTime.now().microsecondsSinceEpoch}_$i';
+        newData['_local_note_id'] = newId;
+        _notes[i] = note.copyWith(data: newData);
+        used.add(newId);
+      } else {
+        used.add(currentId);
+      }
+    }
+  }
+
   Set<String> _filterLabels = {}; // 'starred', 'trashed', 'archived'
   String? _filterPriority; // 'high', 'normal', 'low'
   String? _filterTime; // '1 week', '1 month', '3 months'
@@ -351,6 +385,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       dataMap['_fcm_message_id'] = messageId;
     }
 
+    dataMap['_local_note_id'] = (messageId != null && messageId.isNotEmpty)
+        ? messageId
+        : DateTime.now().microsecondsSinceEpoch.toString();
+
     // Use message.toMap() to preserve all original fields
     final rawMap = message.toMap();
 
@@ -416,6 +454,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         final List<dynamic> data = json.decode(notesJson);
         setState(() {
           _notes = data.map((json) => Note.fromJson(json)).toList();
+
+          // Ensure each note has a stable id (fixes same-title swipe/undo bugs).
+          _ensureLocalNoteIds();
 
           // Cleanup old trashed notes
           final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -533,17 +574,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     if (fcmToken != null) {
       await Clipboard.setData(ClipboardData(text: fcmToken));
-      if (mounted) {
-        ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)?.translate('fcm_token_copied') ??
-                  "FCM Token copied to clipboard",
-            ),
-          ),
-        );
-      }
     }
   }
 
@@ -557,20 +587,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       }
       _applyFilters();
     });
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isReverse
-              ? (AppLocalizations.of(
-                      context,
-                    )?.translate('sorted_by_time_reversed') ??
-                    "Sorted by time, reversed")
-              : (AppLocalizations.of(context)?.translate('sorted_by_time') ??
-                    "Sorted by time"),
-        ),
-      ),
-    );
   }
 
   void _sortByName() {
@@ -583,20 +599,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       }
       _applyFilters();
     });
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isReverse
-              ? (AppLocalizations.of(
-                      context,
-                    )?.translate('sorted_by_name_reversed') ??
-                    "Sorted by name, reversed")
-              : (AppLocalizations.of(context)?.translate('sorted_by_name') ??
-                    "Sorted by name"),
-        ),
-      ),
-    );
   }
 
   @override
@@ -1109,7 +1111,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                 itemBuilder: (context, index) {
                   final note = _filteredNotes[index];
                   return Dismissible(
-                    key: Key(note.data['note_id'] ?? note.notification.title),
+                    key: ValueKey(_noteStableId(note)),
                     background: Container(
                       color: _leftSwipeAction == 'archive'
                           ? Colors.green
@@ -1189,42 +1191,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                   'Moved to trash');
                       }
 
-                      ScaffoldMessenger.of(context).clearSnackBars();
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      final messenger = ScaffoldMessenger.of(context);
+                      messenger.clearSnackBars();
+                      messenger.showSnackBar(
                         SnackBar(
-                          duration: const Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 3),
                           content: Text('$message ${note.notification.title}'),
-                          action: SnackBarAction(
-                            label:
-                                AppLocalizations.of(
-                                  context,
-                                )?.translate('undo') ??
-                                'Undo',
-                            textColor: Theme.of(context).colorScheme.primary,
-                            onPressed: () {
-                              setState(() {
-                                final index = _notes.indexWhere(
-                                  (n) =>
-                                      n.data['note_id'] ==
-                                          note.data['note_id'] &&
-                                      n.notification.title ==
-                                          note.notification.title &&
-                                      n.time == note.time,
-                                );
-                                if (index != -1) {
-                                  if (action == 'archive') {
-                                    _notes[index] = _notes[index].copyWith(
-                                      archived: !_notes[index].archived,
-                                    );
-                                  } else {
-                                    _notes[index] = note;
-                                  }
-                                  _applyFilters();
-                                  _saveNotes();
-                                }
-                              });
-                            },
-                          ),
                         ),
                       );
                     },
