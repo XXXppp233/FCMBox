@@ -62,7 +62,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   newNoteJson['notification'] = notificationMap;
 
   newNoteJson['starred'] = false;
-  newNoteJson['trashed'] = false;
+  newNoteJson['trashed'] = 0;
   newNoteJson['archived'] = false;
   newNoteJson['time'] = DateTime.now().millisecondsSinceEpoch ~/ 1000;
   newNoteJson['priority'] = message.data['priority'] ?? 'normal';
@@ -197,10 +197,7 @@ class MyApp extends StatelessWidget {
                   ),
                   darkTheme: ThemeData(
                     colorScheme: settings.usePureDark
-                        ? darkScheme.copyWith(
-                            surface: Colors.black,
-                            background: Colors.black,
-                          )
+                        ? darkScheme.copyWith(surface: Colors.black)
                         : darkScheme,
                     scaffoldBackgroundColor: settings.usePureDark
                         ? Colors.black
@@ -357,7 +354,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     // Update rawMap with our app-specific fields
     rawMap['starred'] = false;
-    rawMap['trashed'] = false;
+    rawMap['trashed'] = 0;
     rawMap['archived'] = false;
     rawMap['time'] = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     rawMap['priority'] = message.data['priority'] ?? 'normal';
@@ -376,7 +373,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       notification: NotificationInfo(title: title, body: body),
       data: dataMap,
       starred: false,
-      trashed: false,
+      trashed: 0,
       archived: false,
       time: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       priority: message.data['priority'] ?? 'normal',
@@ -416,6 +413,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         final List<dynamic> data = json.decode(notesJson);
         setState(() {
           _notes = data.map((json) => Note.fromJson(json)).toList();
+
+          // Cleanup old trashed notes
+          final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+          final oneMonth = 30 * 24 * 60 * 60;
+          _notes.removeWhere(
+            (n) => n.trashed > 0 && (now - n.trashed) > oneMonth,
+          );
+
           _applyFilters();
         });
       } else {
@@ -423,6 +428,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         final List<dynamic> data = json.decode(response);
         setState(() {
           _notes = data.map((json) => Note.fromJson(json)).toList();
+
+          // Cleanup old trashed notes
+          final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+          final oneMonth = 30 * 24 * 60 * 60;
+          _notes.removeWhere(
+            (n) => n.trashed > 0 && (now - n.trashed) > oneMonth,
+          );
+
           _applyFilters();
         });
       }
@@ -466,11 +479,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       _filteredNotes = _notes.where((note) {
         // Label filter
         if (_filterLabels.isEmpty) {
-          if (note.trashed || note.archived) return false;
+          if (note.trashed > 0 || note.archived) return false;
         } else {
           bool match = false;
           if (_filterLabels.contains('starred') && note.starred) match = true;
-          if (_filterLabels.contains('trashed') && note.trashed) match = true;
+          if (_filterLabels.contains('trashed') && note.trashed > 0) {
+            match = true;
+          }
           if (_filterLabels.contains('archived') && note.archived) match = true;
           if (!match) return false;
         }
@@ -1143,9 +1158,17 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                               archived: !note.archived,
                             );
                           } else {
-                            _notes[index] = note.copyWith(
-                              trashed: !note.trashed,
-                            );
+                            if (note.trashed > 0) {
+                              _notes[index] = note.copyWith(trashed: 0);
+                            } else {
+                              _notes[index] = note.copyWith(
+                                trashed:
+                                    DateTime.now().millisecondsSinceEpoch ~/
+                                    1000,
+                                starred: false,
+                                archived: false,
+                              );
+                            }
                           }
                           _applyFilters();
                           _saveNotes();
@@ -1164,15 +1187,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                   )?.translate('archived_message') ??
                                   'Archived');
                       } else {
-                        message = note.trashed
+                        message = note.trashed > 0
                             ? (AppLocalizations.of(
                                     context,
                                   )?.translate('restored_message') ??
                                   'Restored')
                             : (AppLocalizations.of(
                                     context,
-                                  )?.translate('deleted_message') ??
-                                  'Deleted');
+                                  )?.translate('moved_to_trash_message') ??
+                                  'Moved to trash');
                       }
 
                       ScaffoldMessenger.of(context).clearSnackBars();
@@ -1202,9 +1225,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                       archived: !_notes[index].archived,
                                     );
                                   } else {
-                                    _notes[index] = _notes[index].copyWith(
-                                      trashed: !_notes[index].trashed,
-                                    );
+                                    _notes[index] = note;
                                   }
                                   _applyFilters();
                                   _saveNotes();
@@ -1237,6 +1258,21 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                             _saveNotes();
                           }
                         });
+                      },
+                      onDelete: () {
+                        setState(() {
+                          _notes.remove(note);
+                          _applyFilters();
+                          _saveNotes();
+                        });
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '${AppLocalizations.of(context)?.translate('deleted_message') ?? 'Deleted'} ${note.notification.title}',
+                            ),
+                          ),
+                        );
                       },
                     ),
                   );
@@ -1295,12 +1331,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 class _NoteCard extends StatefulWidget {
   final Note note;
   final VoidCallback onToggleStar;
+  final VoidCallback? onDelete;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
   const _NoteCard({
     required this.note,
     required this.onToggleStar,
+    this.onDelete,
     required this.onTap,
     this.onLongPress,
   });
@@ -1383,10 +1421,18 @@ class _NoteCardState extends State<_NoteCard> {
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     icon: Icon(
-                      widget.note.starred ? Icons.star : Icons.star_border,
-                      color: widget.note.starred ? Colors.amber : Colors.grey,
+                      widget.note.trashed > 0
+                          ? Icons.delete_forever
+                          : (widget.note.starred
+                                ? Icons.star
+                                : Icons.star_border),
+                      color: widget.note.trashed > 0
+                          ? Colors.red
+                          : (widget.note.starred ? Colors.amber : Colors.grey),
                     ),
-                    onPressed: widget.onToggleStar,
+                    onPressed: widget.note.trashed > 0
+                        ? widget.onDelete
+                        : widget.onToggleStar,
                   ),
                 ],
               ),

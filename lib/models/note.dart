@@ -2,7 +2,7 @@ class Note {
   final NotificationInfo notification;
   final Map<String, dynamic> data;
   final bool starred;
-  final bool trashed;
+  final int trashed;
   final bool archived;
   final int time;
   final String priority;
@@ -24,7 +24,11 @@ class Note {
       notification: NotificationInfo.fromJson(json['notification']),
       data: json['data'] ?? {},
       starred: json['starred'] ?? false,
-      trashed: json['trashed'] ?? false,
+      trashed: json['trashed'] is bool
+          ? (json['trashed']
+                ? DateTime.now().millisecondsSinceEpoch ~/ 1000
+                : 0)
+          : (json['trashed'] ?? 0),
       archived: json['archived'] ?? false,
       time: json['time'] ?? 0,
       priority: json['priority'] ?? 'normal',
@@ -36,7 +40,7 @@ class Note {
     NotificationInfo? notification,
     Map<String, dynamic>? data,
     bool? starred,
-    bool? trashed,
+    int? trashed,
     bool? archived,
     int? time,
     String? priority,

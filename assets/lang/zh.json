@@ -41,6 +41,7 @@
   "archived_message": "已归档",
   "unarchived_message": "已取消归档",
   "deleted_message": "已删除",
+  "moved_to_trash_message": "已移至回收站",
   "restored_message": "已恢复",
   "1_week": "1 周",
   "1_month": "1 个月",

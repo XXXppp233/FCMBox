@@ -10,7 +10,7 @@
       "bg_color": "#F28B82"
     },
     "starred": true,
-    "trashed": false,
+    "trashed": 0,
     "time": 1698418500,
     "priority": "high"
   },
@@ -26,7 +26,7 @@
       "completed_count": "2"
     },
     "starred": false,
-    "trashed": false,
+    "trashed": 0,
     "time": 1698487200,
     "priority": "normal"
   },
@@ -40,7 +40,7 @@
       "delete_timestamp": "1698400000"
     },
     "starred": false,
-    "trashed": true,
+    "trashed": 1698400000,
     "time": 1698226200,
     "priority": "low"
   },
@@ -56,7 +56,7 @@
       "aspect_ratio": "1.5"
     },
     "starred": true,
-    "trashed": false,
+    "trashed": 0,
     "time": 1698869700,
     "priority": "normal"
   },
@@ -71,7 +71,7 @@
       "permission": "write"
     },
     "starred": false,
-    "trashed": false,
+    "trashed": 0,
     "time": 1698924000,
     "priority": "high"
   },
@@ -87,7 +87,7 @@
       "audio_url": "https://cdn.example.com/audio_006.mp3"
     },
     "starred": false,
-    "trashed": false,
+    "trashed": 0,
     "time": 1699200000,
     "priority": "normal"
   },
@@ -102,7 +102,7 @@
       "preview_img": "https://flutter.dev/images/catalog-widget-placeholder.png"
     },
     "starred": true,
-    "trashed": false,
+    "trashed": 0,
     "time": 1699260330,
     "priority": "normal"
   },
@@ -117,7 +117,7 @@
       "stroke_data_version": "v2"
     },
     "starred": false,
-    "trashed": false,
+    "trashed": 0,
     "time": 1699395000,
     "priority": "low"
   },
@@ -132,7 +132,7 @@
       "is_locked": "true"
     },
     "starred": true,
-    "trashed": false,
+    "trashed": 0,
     "time": 1699448700,
     "priority": "high"
   },
@@ -146,7 +146,7 @@
       "is_archived": "true"
     },
     "starred": false,
-    "trashed": false,
+    "trashed": 0,
     "time": 1699520400,
     "priority": "normal"
   }

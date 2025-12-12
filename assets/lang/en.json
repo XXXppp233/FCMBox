@@ -42,6 +42,7 @@
   "archived_message": "Archived",
   "unarchived_message": "Unarchived",
   "deleted_message": "Deleted",
+  "moved_to_trash_message": "Moved to trash",
   "restored_message": "Restored",
   "1_week": "1 week",
   "1_month": "1 month",
