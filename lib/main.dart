@@ -420,6 +420,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           _notes.removeWhere(
             (n) => n.trashed > 0 && (now - n.trashed) > oneMonth,
           );
+          _saveNotes();
 
           _applyFilters();
         });
@@ -435,6 +436,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           _notes.removeWhere(
             (n) => n.trashed > 0 && (now - n.trashed) > oneMonth,
           );
+          _saveNotes();
 
           _applyFilters();
         });
@@ -1201,6 +1203,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                       ScaffoldMessenger.of(context).clearSnackBars();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
+                          duration: const Duration(seconds: 2),
                           content: Text('$message ${note.notification.title}'),
                           action: SnackBarAction(
                             label:
@@ -1268,6 +1271,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                         ScaffoldMessenger.of(context).clearSnackBars();
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
+                            duration: const Duration(seconds: 2),
                             content: Text(
                               '${AppLocalizations.of(context)?.translate('deleted_message') ?? 'Deleted'} ${note.notification.title}',
                             ),
