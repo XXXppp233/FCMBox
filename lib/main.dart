@@ -30,6 +30,7 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   final prefs = await SharedPreferences.getInstance();
+  await prefs.reload();
   final String? notesJson = prefs.getString('notes');
   List<dynamic> data = [];
   if (notesJson != null) {
@@ -408,6 +409,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   Future<void> _loadNotes() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
       final String? notesJson = prefs.getString('notes');
       if (notesJson != null) {
         final List<dynamic> data = json.decode(notesJson);
@@ -425,19 +427,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           _applyFilters();
         });
       } else {
-        final String response = await rootBundle.loadString('assets/data.json');
-        final List<dynamic> data = json.decode(response);
         setState(() {
-          _notes = data.map((json) => Note.fromJson(json)).toList();
-
-          // Cleanup old trashed notes
-          final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-          final oneMonth = 30 * 24 * 60 * 60;
-          _notes.removeWhere(
-            (n) => n.trashed > 0 && (now - n.trashed) > oneMonth,
-          );
-          _saveNotes();
-
+          _notes = [];
           _applyFilters();
         });
       }

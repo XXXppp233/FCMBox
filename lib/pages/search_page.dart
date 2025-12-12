@@ -52,10 +52,8 @@ class _SearchPageState extends State<SearchPage> {
         _allNotes = data.map((json) => Note.fromJson(json)).toList();
       });
     } else {
-      final String response = await rootBundle.loadString('assets/data.json');
-      final List<dynamic> data = json.decode(response);
       setState(() {
-        _allNotes = data.map((json) => Note.fromJson(json)).toList();
+        _allNotes = [];
       });
     }
   }
