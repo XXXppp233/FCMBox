@@ -28,6 +28,11 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Ignore empty messages (e.g. control messages or dismissal events)
+  if (message.notification == null && message.data.isEmpty) {
+    return;
+  }
+
   await Firebase.initializeApp();
   final prefs = await SharedPreferences.getInstance();
   await prefs.reload();
@@ -370,6 +375,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   void _addNoteFromMessage(RemoteMessage message) {
+    // Ignore empty messages
+    if (message.notification == null && message.data.isEmpty) {
+      return;
+    }
+
     final messageId = message.messageId;
     if (messageId != null) {
       final exists = _notes.any((n) => n.data['_fcm_message_id'] == messageId);

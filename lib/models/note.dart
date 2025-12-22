@@ -65,10 +65,13 @@ class NotificationInfo {
 
   NotificationInfo({required this.title, required this.body});
 
-  factory NotificationInfo.fromJson(Map<String, dynamic> json) {
-    return NotificationInfo(
-      title: json['title'] ?? '',
-      body: json['body'] ?? '',
-    );
+  factory NotificationInfo.fromJson(dynamic json) {
+    if (json is Map<String, dynamic>) {
+      return NotificationInfo(
+        title: json['title'] ?? 'No Title',
+        body: json['body'] ?? 'No Body',
+      );
+    }
+    return NotificationInfo(title: 'No Title', body: 'No Body');
   }
 }
