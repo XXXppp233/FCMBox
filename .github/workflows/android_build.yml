@@ -38,9 +38,19 @@ jobs:
           fi
 
       - name: Build APK
+        env:
+          KEY_STORE_BASE64: ${{ secrets.KEY_STORE_BASE64 }}
+          KEY_STORE_ALIAS: ${{ secrets.KEY_STORE_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
         run: flutter build apk --release --target-platform android-arm64
 
       - name: Build App Bundle
+        env:
+          KEY_STORE_BASE64: ${{ secrets.KEY_STORE_BASE64 }}
+          KEY_STORE_ALIAS: ${{ secrets.KEY_STORE_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
         run: flutter build appbundle --release 
 
       - name: Upload APK
