@@ -8,9 +8,6 @@ plugins {
 
 import java.util.Properties
 import java.io.FileInputStream
-import java.util.Base64
-import java.io.File
-import java.io.FileOutputStream
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -38,7 +35,7 @@ android {
             val envKeyAlias = System.getenv("KEY_STORE_ALIAS")
             val envKeyPassword = System.getenv("KEY_PASSWORD")
             val envStorePassword = System.getenv("KEY_STORE_PASSWORD")
-            val envStoreBase64 = System.getenv("KEY_STORE_BASE64")
+            val envStorePath = System.getenv("KEY_STORE_PATH")
 
             keyAlias = keystoreProperties["keyAlias"] as String? ?: envKeyAlias
             keyPassword = keystoreProperties["keyPassword"] as String? ?: envKeyPassword
@@ -47,16 +44,8 @@ android {
             val propStoreFile = keystoreProperties["storeFile"] as String?
             if (propStoreFile != null) {
                 storeFile = file(propStoreFile)
-            } else if (envStoreBase64 != null) {
-                val keystoreFile = File(rootProject.buildDir, "release.jks")
-                keystoreFile.parentFile.mkdirs()
-                try {
-                    val decodedBytes = Base64.getDecoder().decode(envStoreBase64)
-                    FileOutputStream(keystoreFile).use { it.write(decodedBytes) }
-                    storeFile = keystoreFile
-                } catch (e: Exception) {
-                    println("Failed to decode KEY_STORE_BASE64: ${e.message}")
-                }
+            } else if (envStorePath != null) {
+                storeFile = file(envStorePath)
             }
         }
     }
