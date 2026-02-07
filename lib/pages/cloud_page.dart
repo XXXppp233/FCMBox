@@ -97,16 +97,14 @@ class _CloudPageState extends State<CloudPage> {
               title: const Text('Backend Status', style: TextStyle(color: Colors.white)),
               contentPadding: const EdgeInsets.all(24),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Icon(Icons.wifi, size: 32, color: Colors.grey[400]),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
                       controller: urlController,
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
@@ -172,7 +170,7 @@ class _CloudPageState extends State<CloudPage> {
                     )
                   ],
                 ),
-              ),
+              )),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
