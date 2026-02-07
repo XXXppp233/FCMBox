@@ -51,16 +51,38 @@ export default {
         ).run()
         
         // FCM Sender
-        const saJson = await env.KV.get('service-account')
-        const FCMToken = await env.KV.get('token')
-        // FCMSender(serviceAccount, FCMToken, data)
-        if (saJson && FCMToken) {
-            const serviceAccount = JSON.parse(saJson);
-            ctx.waitUntil(FCMSender(serviceAccount, FCMToken, overview, data, service, image || ALTER_IMG ));
-          }
+        const saJson = await env.KV.get('service-account');
+        if (saJson) {
+          const serviceAccount = JSON.parse(saJson);
+    
+          // 1. 从 D1 获取所有 Token
+          const { results: tokenRows } = await env.DB.prepare('SELECT device, token FROM tokens').all();
 
+          if (tokenRows && tokenRows.length > 0) {
+          // 2. 并发构造推送任务
+          const tasks = tokenRows.map(async (row) => {
+            const success = await FCMSender(
+                serviceAccount, 
+                row.token, 
+                overview, 
+                service, 
+                image || ALTER_IMG
+            );
 
-        return new Response("success")
+            // 3. 如果发送失败，输出并清理
+            if (!success) {
+                console.log(`Fail to send to ${row.device}, rm token`);
+                // 异步清理 D1 中的失效 Token，不阻塞其他任务
+                ctx.waitUntil(
+                    env.DB.prepare('DELETE FROM tokens WHERE device = ?').bind(row.device).run()
+                    );
+            }
+        });
+        // 4. 使用 waitUntil 确保所有并发请求在 Worker 关闭前完成
+        ctx.waitUntil(Promise.allSettled(tasks));
+      }
+    }
+    return new Response("success");
       }
       if(body.action == "get"){
         const quantity = body.quantity || 5  // default is the latest 5 logs
@@ -81,8 +103,8 @@ export default {
     }
     if (request.method == "PUT"){
       const body = await request.json()
-      if (body.token != undefined){
-        await env.KV.put('token', body.token)
+      if (body.token != undefined && body.device != undefined){
+        await env.DB.prepare('INSERT INTO tokens (token, device) VALUES (?, ?)').bind(body.token, body.device).run()
         return new Response("success")
       }else {
         return new Response("Invalid Method")
@@ -92,7 +114,7 @@ export default {
   }
 };
 
-async function FCMSender(sa, token, overview, data, service, image) {
+async function FCMSender(sa, token, overview, service, image) {
   try {
     const accessToken = await getAccessToken(sa);
     const url = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
@@ -100,15 +122,7 @@ async function FCMSender(sa, token, overview, data, service, image) {
     const fcmBody = {
       message: {
         token: token,
-        notification: {
-          title: service,
-          body: overview,
-          image: image
-        },
-        data: {
-          timestamp: String(Date.now()),
-          main: typeof data === 'object' ? JSON.stringify(data) : String(data)
-        }
+        notification: { title: service, body: overview, image: image },
       }
     };
 
@@ -121,9 +135,22 @@ async function FCMSender(sa, token, overview, data, service, image) {
       body: JSON.stringify(fcmBody)
     });
 
-    return await res.json();
+    const result = await res.json();
+
+    if (res.ok) {
+      return true; // 发送成功
+    } else {
+      // 重点：检查是否为 Token 失效
+      // FCM v1 错误码 UNREGISTERED (404) 或 INVALID_ARGUMENT (400)
+      if (res.status === 404 || (result.error && result.error.status === 'UNREGISTERED')) {
+        return false; // 触发外层清理逻辑
+      }
+      console.error(`FCM API Error [${res.status}]:`, result.error?.message);
+      return true; // 其他类型的错误（如 500）暂时不删除 Token，避免误删
+    }
   } catch (err) {
-    console.error("FCM Send Error:", err);
+    console.error("Network or Auth Error:", err);
+    return true; // 网络波动导致失败，不建议删除 Token
   }
 }
 

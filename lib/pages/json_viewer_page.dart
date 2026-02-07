@@ -77,11 +77,20 @@ class JsonViewerPage extends StatelessWidget {
   }
 
   Widget _buildDataRenderer(BuildContext context, dynamic data) {
-    if (data is Map) {
-      if (data.isEmpty) return const SizedBox.shrink();
+    dynamic processedData = data;
+    if (processedData is String) {
+      try {
+        processedData = json.decode(processedData);
+      } catch (_) {
+        // Not a JSON string, keep as is
+      }
+    }
+
+    if (processedData is Map) {
+      if (processedData.isEmpty) return const SizedBox.shrink();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: data.entries.map((entry) {
+        children: processedData.entries.map<Widget>((entry) {
           final key = entry.key.toString();
           final value = entry.value;
           
@@ -103,10 +112,10 @@ class JsonViewerPage extends StatelessWidget {
           );
         }).toList(),
       );
-    } else if (data is List) {
-       return _buildListRenderer(context, data);
+    } else if (processedData is List) {
+       return _buildListRenderer(context, processedData);
     } else {
-       return _buildParagraphRenderer(context, data);
+       return _buildParagraphRenderer(context, processedData);
     }
   }
 

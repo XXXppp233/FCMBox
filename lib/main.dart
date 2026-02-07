@@ -415,15 +415,27 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           
           setState(() {
             if (deleteOld) {
-              _notes = newNotes;
-            } else {
-              final existingIds = _notes.map((n) => n.id).toSet();
-              for (var n in newNotes) {
-                if (!existingIds.contains(n.id)) {
-                  _notes.insert(0, n);
-                }
+              if (_selectedService != null) {
+                // If service selected, only delete notes of that service
+                _notes.removeWhere((n) => n.service == _selectedService);
+              } else {
+                 // Or verify what logic for "all" 
+                 // Assuming update overwrites everything if no service selected? 
+                 // Or just prepend? "Update ... delete old ... if current designated service ... only delete this service's old"
+                 _notes = [];
               }
             }
+            
+            final existingIds = _notes.map((n) => n.timestamp).toSet(); // Using timestamp as PK
+            for (var n in newNotes) {
+               // Assuming logic: if update overwrites, we already cleared relevant notes
+               // If appending, check duplicates
+               if (!existingIds.contains(n.timestamp)) {
+                 _notes.insert(0, n);
+                 existingIds.add(n.timestamp);
+               }
+            }
+            
             _updateServices();
             _applyFilters();
           });
@@ -441,18 +453,76 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   void _showQuantityPicker() async {
+     double sliderValue = _quantityFilter.toDouble();
+     if (sliderValue > 200) sliderValue = 200;
+
      final result = await showDialog<int>(
        context: context,
        builder: (context) {
-         return AlertDialog(
-           title: const Text('Select Quantity'),
-           content: Wrap(
-             spacing: 8,
-             children: [10, 20, 50, 100].map((e) => ActionChip(
-               label: Text('$e'),
-               onPressed: () => Navigator.pop(context, e),
-             )).toList(),
-           ),
+         return StatefulBuilder(
+           builder: (context, setState) {
+             return AlertDialog(
+               title: const Text('Select Quantity'),
+               content: Row(
+                 mainAxisSize: MainAxisSize.min,
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                   // Vertical list of presets
+                   Column(
+                     mainAxisSize: MainAxisSize.min,
+                     children: [10, 20, 50, 100].map((e) => Padding(
+                       padding: const EdgeInsets.symmetric(vertical: 4.0),
+                       child: ActionChip(
+                         label: Text('$e'),
+                         onPressed: () {
+                           setState(() => sliderValue = e.toDouble());
+                         },
+                       ),
+                     )).toList(),
+                   ),
+                   const SizedBox(width: 16),
+                   // Vertical Slider
+                   SizedBox(
+                     height: 200, 
+                     child: Column(
+                       children: [
+                         Expanded(
+                           child: RotatedBox(
+                             quarterTurns: 3, 
+                             child: SliderTheme(
+                               data: SliderTheme.of(context).copyWith(
+                                 trackHeight: 12, // Thick slider
+                                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                               ),
+                               child: Slider(
+                                 value: sliderValue,
+                                 min: 0,
+                                 max: 200,
+                                 onChanged: (val) {
+                                   setState(() => sliderValue = val);
+                                 },
+                               ),
+                             ),
+                           ),
+                         ),
+                         Text('${sliderValue.toInt()}'),
+                       ],
+                     ),
+                   ),
+                 ],
+               ),
+               actions: [
+                 TextButton(
+                   onPressed: () => Navigator.pop(context),
+                   child: const Text('Cancel'),
+                 ),
+                 TextButton(
+                   onPressed: () => Navigator.pop(context, sliderValue.toInt()),
+                   child: const Text('OK'),
+                 )
+               ],
+             );
+           }
          );
        }
      );
@@ -550,8 +620,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             ),
             if (_services.isNotEmpty) 
               ..._services.map((s) => ListTile(
-                leading: const Icon(Icons.cloud_queue), 
                 title: Text(s),
+                contentPadding: const EdgeInsets.only(left: 72, right: 16), // Align text to where title would be if icon existed
                 selected: _selectedService == s,
                 onTap: () {
                   setState(() {
@@ -631,15 +701,23 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Row(children: [
                  if (_selectedService != null)
-                 InputChip(
-                   label: Text(_selectedService!),
-                   onDeleted: () {
-                     setState(() {
-                       _selectedService = null;
-                       _applyFilters();
-                     });
-                   },
-                 ),
+                   InputChip(
+                     label: Text(_selectedService!),
+                     onDeleted: () {
+                       setState(() {
+                         _selectedService = null;
+                         _applyFilters();
+                       });
+                     },
+                   )
+                 else
+                   ActionChip(
+                      label: Text(AppLocalizations.of(context)?.translate('all') ?? 'All'),
+                      avatar: const Icon(Icons.filter_list, size: 18),
+                      onPressed: () {
+                         _scaffoldKey.currentState?.openDrawer();
+                      },
+                   ),
                  const SizedBox(width: 8),
                  ActionChip(
                    label: Text('Newest $_quantityFilter'),

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -6,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class CloudPage extends StatefulWidget {
   const CloudPage({super.key});
@@ -24,6 +26,7 @@ class _CloudPageState extends State<CloudPage> {
   String _backendInfo = 'The backend info';
   bool _isConnected = false;
   bool _isLoading = false;
+  bool _isPutting = false;
   File? _faviconFile;
   bool _deleteOldData = false;
 
@@ -67,74 +70,128 @@ class _CloudPageState extends State<CloudPage> {
     await prefs.setBool('delete_old_data', _deleteOldData);
   }
 
-  void _showConfigSheet() {
+  void _showConfigSheet() async {
     final urlController = TextEditingController(text: _backendUrl);
     final authController = TextEditingController(text: _authKey);
     final ipController = TextEditingController(text: _ipAddress);
     bool tempHttps = _useHttps;
+    String deviceName = "Unknown Device";
 
-    showModalBottomSheet(
+    try {
+      if (Platform.isAndroid) {
+        AndroidDeviceInfo androidInfo = await DeviceInfoPlugin().androidInfo;
+        deviceName = androidInfo.model;
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 16,
-                right: 16,
-                top: 16,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: urlController,
-                    decoration: const InputDecoration(labelText: 'Backend URL'),
-                  ),
-                  TextField(
-                    controller: authController,
-                    decoration: const InputDecoration(labelText: 'Authorization'),
-                  ),
-                  TextField(
-                    controller: ipController,
-                    decoration: const InputDecoration(labelText: 'IP Address (Optional)'),
-                  ),
-                  SwitchListTile(
-                    title: const Text('https'),
-                    value: tempHttps,
-                    onChanged: (val) {
-                      setSheetState(() => tempHttps = val);
-                    },
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
+            return AlertDialog(
+              backgroundColor: const Color(0xFF202124),
+              title: const Text('Network details', style: TextStyle(color: Colors.white)),
+              contentPadding: const EdgeInsets.all(24),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Icon(Icons.wifi, size: 32, color: Colors.grey[400]),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: urlController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: 'Backend URL',
+                        labelStyle: TextStyle(color: Colors.grey[400]),
+                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey[600]!)),
                       ),
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            _backendUrl = urlController.text;
-                            _authKey = authController.text;
-                            _ipAddress = ipController.text;
-                            _useHttps = tempHttps;
-                          });
-                          _saveSettings();
-                          Navigator.pop(context);
-                          _checkBackend();
-                        },
-                        child: const Text('Save'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: authController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: 'Authorization',
+                        labelStyle: TextStyle(color: Colors.grey[400]),
+                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey[600]!)),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                ],
+                    ),
+                    const SizedBox(height: 8),
+                    ExpansionTile(
+                       title: const Text('Advanced options', style: TextStyle(color: Colors.white)),
+                       iconColor: Colors.white,
+                       collapsedIconColor: Colors.grey[400],
+                       children: [
+                          TextField(
+                            controller: ipController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'IP Address (Optional)',
+                              labelStyle: TextStyle(color: Colors.grey[400]),
+                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey[600]!)),
+                            ),
+                          ),
+                          SwitchListTile(
+                            title: const Text('Use HTTPS', style: TextStyle(color: Colors.white)),
+                            value: tempHttps,
+                            activeColor: Colors.blue[200],
+                            onChanged: (val) {
+                              setSheetState(() => tempHttps = val);
+                            },
+                          ),
+                       ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                       children: [
+                          Text('Device: $deviceName', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                          IconButton(
+                             icon: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white),
+                             onPressed: () {}, // No direct intent to settings in older android versions seamlessly, keep visual as requested
+                          )
+                       ],
+                    )
+                  ],
+                ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.grey[400],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _backendUrl = urlController.text;
+                      _authKey = authController.text;
+                      _ipAddress = ipController.text;
+                      _useHttps = tempHttps;
+                    });
+                    _saveSettings();
+                    Navigator.pop(context);
+                    _checkBackend();
+                  },
+                  style: ElevatedButton.styleFrom(
+                     backgroundColor: const Color(0xFFA8C7FA),
+                     foregroundColor: const Color(0xFF062E6F),
+                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
             );
           },
         );
@@ -157,8 +214,6 @@ class _CloudPageState extends State<CloudPage> {
     }
 
     if (_ipAddress.isNotEmpty) {
-      // Logic to strip host and replace with IP, adding Host header
-      // This is basic and might fail SSL SNI checks as noted in thoughts
       targetUri = uri.replace(host: _ipAddress);
       headers['Host'] = _backendUrl;
     }
@@ -200,6 +255,7 @@ class _CloudPageState extends State<CloudPage> {
         await prefs.setBool('backend_active', true);
 
         // 3. PUT Token
+        setState(() => _isPutting = true);
         await _registerToken(targetUri, headers);
 
       } else {
@@ -208,14 +264,12 @@ class _CloudPageState extends State<CloudPage> {
     } catch (e) {
       debugPrint('Backend check failed: $e');
       setState(() {
-         // Keep old title/info if failed? Prompt says "If http fails, these will not change"
-         // But status icon remains cross or loading? "Backend Status left icon ... check" if success.
-         // If fail, it effectively stays/reverts to X?
-         // We'll set isConnected to false if it failed.
+         // Keep old title/info if failed
       });
     } finally {
       setState(() {
         _isLoading = false;
+        _isPutting = false;
       });
     }
   }
@@ -224,16 +278,22 @@ class _CloudPageState extends State<CloudPage> {
     try {
       String? token = await FirebaseMessaging.instance.getToken();
       if (token == null) return;
-
-      // PUT to root or specific endpoint? 
-      // Prompt: "Send a PUT request content is this device's pure FCM Token"
-      // Implies PUT to the base URL with body = token? or proper JSON?
-      // "content is ... Token". I will assume raw body or simple text/plain.
+      
+      String deviceName = "Unknown Device";
+      if (Platform.isAndroid) {
+        AndroidDeviceInfo androidInfo = await DeviceInfoPlugin().androidInfo;
+        deviceName = androidInfo.model;
+      }
+      
+      final body = json.encode({
+        "device": deviceName,
+        "token": token
+      });
       
       final response = await http.put(
         baseUri, 
-        headers: {...baseHeaders, 'Content-Type': 'text/plain'}, 
-        body: token
+        headers: {...baseHeaders, 'Content-Type': 'application/json'}, 
+        body: body
       );
       
       if (response.statusCode != 200 && response.statusCode != 204) {
@@ -262,18 +322,25 @@ class _CloudPageState extends State<CloudPage> {
           const SizedBox(height: 40),
           // Dynamic Icon (Favicon or default)
           if (_faviconFile != null)
-             CircleAvatar(
-                radius: 48,
-                backgroundColor: Colors.transparent,
-                backgroundImage: FileImage(_faviconFile!),
+             Container(
+               height: 96,
+               width: 96,
+               margin: const EdgeInsets.only(bottom: 16),
+               decoration: const BoxDecoration(shape: BoxShape.circle),
+               child: ClipOval(
+                 child: Image.file(_faviconFile!, fit: BoxFit.contain),
+               ),
              )
           else 
-            CircleAvatar(
-              radius: 48,
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              child: _isConnected 
-                ? Icon(Icons.cloud_done, size: 48, color: Theme.of(context).colorScheme.onPrimaryContainer) // Example for connected
-                : Icon(Icons.cloud_off, size: 48, color: Theme.of(context).colorScheme.onPrimaryContainer), // No network icon
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+               child: CircleAvatar(
+                radius: 48,
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                child: _isConnected 
+                  ? Icon(Icons.cloud_done, size: 48, color: Theme.of(context).colorScheme.onPrimaryContainer) // Example for connected
+                  : Icon(Icons.cloud_off, size: 48, color: Theme.of(context).colorScheme.onPrimaryContainer), // No network icon
+              ),
             ),
             
           const SizedBox(height: 16),
@@ -293,7 +360,7 @@ class _CloudPageState extends State<CloudPage> {
           const SizedBox(height: 40),
           
           ListTile(
-            leading: _isLoading 
+            leading: _isPutting 
               ? const SizedBox(
                   width: 24, 
                   height: 24, 
