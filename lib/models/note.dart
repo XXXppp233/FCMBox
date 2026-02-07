@@ -1,77 +1,57 @@
 class Note {
-  final NotificationInfo notification;
-  final Map<String, dynamic> data;
-  final bool starred;
-  final int trashed;
-  final bool archived;
-  final int time;
-  final String priority;
-  final Map<String, dynamic>? rawJson;
+  final int timestamp;
+  final dynamic data;
+  final String service;
+  final String overview;
+  final String? image;
+  final String id; // Internal ID for UI
 
   Note({
-    required this.notification,
+    required this.timestamp,
     required this.data,
-    required this.starred,
-    required this.trashed,
-    required this.archived,
-    required this.time,
-    required this.priority,
-    this.rawJson,
-  });
+    required this.service,
+    required this.overview,
+    this.image,
+    String? id,
+  }) : id = id ?? '${timestamp}_${service}';
 
   factory Note.fromJson(Map<String, dynamic> json) {
     return Note(
-      notification: NotificationInfo.fromJson(json['notification']),
-      data: json['data'] ?? {},
-      starred: json['starred'] ?? false,
-      trashed: json['trashed'] is bool
-          ? (json['trashed']
-                ? DateTime.now().millisecondsSinceEpoch ~/ 1000
-                : 0)
-          : (json['trashed'] ?? 0),
-      archived: json['archived'] ?? false,
-      time: json['time'] ?? 0,
-      priority: json['priority'] ?? 'normal',
-      rawJson: json,
+      timestamp: json['timestamp'] ?? 0,
+      data: json['data'],
+      service: json['service'] ?? 'Unknown Service',
+      overview: json['overview'] ?? '',
+      image: json['image'],
+      id: json['_id']?.toString() ?? json['_local_note_id']?.toString() 
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'timestamp': timestamp,
+      'data': data,
+      'service': service,
+      'overview': overview,
+      'image': image,
+      '_id': id,
+    };
   }
 
   Note copyWith({
-    NotificationInfo? notification,
-    Map<String, dynamic>? data,
-    bool? starred,
-    int? trashed,
-    bool? archived,
-    int? time,
-    String? priority,
-    Map<String, dynamic>? rawJson,
+    int? timestamp,
+    dynamic data,
+    String? service,
+    String? overview,
+    String? image,
+    String? id,
   }) {
     return Note(
-      notification: notification ?? this.notification,
+      timestamp: timestamp ?? this.timestamp,
       data: data ?? this.data,
-      starred: starred ?? this.starred,
-      trashed: trashed ?? this.trashed,
-      archived: archived ?? this.archived,
-      time: time ?? this.time,
-      priority: priority ?? this.priority,
-      rawJson: rawJson ?? this.rawJson,
+      service: service ?? this.service,
+      overview: overview ?? this.overview,
+      image: image ?? this.image,
+      id: id ?? this.id,
     );
-  }
-}
-
-class NotificationInfo {
-  final String title;
-  final String body;
-
-  NotificationInfo({required this.title, required this.body});
-
-  factory NotificationInfo.fromJson(dynamic json) {
-    if (json is Map<String, dynamic>) {
-      return NotificationInfo(
-        title: json['title'] ?? 'No Title',
-        body: json['body'] ?? 'No Body',
-      );
-    }
-    return NotificationInfo(title: 'No Title', body: 'No Body');
   }
 }

@@ -46,10 +46,12 @@ class _SearchPageState extends State<SearchPage> {
     final prefs = await SharedPreferences.getInstance();
     final String? notesJson = prefs.getString('notes');
     if (notesJson != null) {
-      final List<dynamic> data = json.decode(notesJson);
-      setState(() {
-        _allNotes = data.map((json) => Note.fromJson(json)).toList();
-      });
+      try {
+        final List<dynamic> data = json.decode(notesJson);
+        setState(() {
+          _allNotes = data.map((item) => Note.fromJson(item)).toList();
+        });
+      } catch (_) {}
     } else {
       setState(() {
         _allNotes = [];
@@ -113,18 +115,10 @@ class _SearchPageState extends State<SearchPage> {
     setState(() {
       _isSearching = true;
       _titleResults = _allNotes.where((note) {
-        return note.notification.title.toLowerCase().contains(query);
+        return note.service.toLowerCase().contains(query);
       }).toList();
       _contentResults = _allNotes.where((note) {
-        // Exclude if already in title results to avoid duplicates?
-        // Or show in both? Usually show in both or prioritize.
-        // User said "Search by Title" and "Search by Content".
-        // If a note matches both, it might appear in both.
-        // Let's keep it simple and allow duplicates for now, or exclude.
-        // If I exclude, I should check if it's in _titleResults.
-        // But "Search by Content" implies the content matches.
-        // Let's allow duplicates as they are distinct matches.
-        return note.notification.body.toLowerCase().contains(query);
+        return note.overview.toLowerCase().contains(query);
       }).toList();
     });
   }
@@ -153,8 +147,7 @@ class _SearchPageState extends State<SearchPage> {
           focusNode: _focusNode,
           style: TextStyle(color: isDark ? Colors.white : Colors.black),
           decoration: InputDecoration(
-            hintText:
-                AppLocalizations.of(context)?.translate('search_hint') ??
+            hintText: AppLocalizations.of(context)?.translate('search_hint') ??
                 'Search',
             hintStyle: TextStyle(
               color: isDark ? Colors.grey : Colors.grey[600],
@@ -217,9 +210,8 @@ class _SearchPageState extends State<SearchPage> {
       children: [
         if (_titleResults.isNotEmpty)
           _buildSection(
-            title:
-                AppLocalizations.of(context)?.translate('search_by_title') ??
-                'Search by Title',
+            title: AppLocalizations.of(context)?.translate('search_by_title') ??
+                'Search by Services',
             results: _titleResults,
             isExpanded: _isTitleExpanded,
             onToggle: () {
@@ -227,11 +219,11 @@ class _SearchPageState extends State<SearchPage> {
                 _isTitleExpanded = !_isTitleExpanded;
               });
             },
+            isService: true,
           ),
         if (_contentResults.isNotEmpty)
           _buildSection(
-            title:
-                AppLocalizations.of(context)?.translate('search_by_content') ??
+            title: AppLocalizations.of(context)?.translate('search_by_content') ??
                 'Search by Content',
             results: _contentResults,
             isExpanded: _isContentExpanded,
@@ -240,6 +232,7 @@ class _SearchPageState extends State<SearchPage> {
                 _isContentExpanded = !_isContentExpanded;
               });
             },
+            isService: false,
           ),
       ],
     );
@@ -250,6 +243,7 @@ class _SearchPageState extends State<SearchPage> {
     required List<Note> results,
     required bool isExpanded,
     required VoidCallback onToggle,
+    required bool isService,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -284,22 +278,26 @@ class _SearchPageState extends State<SearchPage> {
             children: results.map((note) {
               return ListTile(
                 title: Text(
-                  note.notification.title,
+                  isService ? note.service : note.overview,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                subtitle: Text(
-                  note.notification.body,
-                  maxLines: 2,
+                subtitle: isService ? null : Text(
+                  note.service,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => JsonViewerPage(note: note),
-                    ),
-                  );
+                  if (isService) {
+                     Navigator.pop(context, {'type': 'service', 'value': note.service});
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => JsonViewerPage(note: note),
+                      ),
+                    );
+                  }
                 },
               );
             }).toList(),
