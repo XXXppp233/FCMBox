@@ -524,7 +524,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               title: Text(AppLocalizations.of(context)?.translate('settings') ?? 'Settings'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (context) => SettingsPage(onSync: () {}))).then((_) {});
+                Navigator.push(context, MaterialPageRoute(builder: (context) => SettingsPage(onSync: () async {}))).then((_) {});
               },
             ),
              ListTile(
@@ -646,7 +646,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                    onPressed: _showQuantityPicker,
                  ),
                  const SizedBox(width: 8),
-                 ActionChip(
+                 InputChip(
                    label: Text(_timeFilterStart == null ? 'Select Time' : DateTime.fromMillisecondsSinceEpoch(_timeFilterStart!).toString().split(' ')[0]),
                    onPressed: _showTimePicker,
                    onDeleted: _timeFilterStart != null ? () {
