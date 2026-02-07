@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:android_intent_plus/android_intent.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 class CloudPage extends StatefulWidget {
@@ -93,7 +94,7 @@ class _CloudPageState extends State<CloudPage> {
           builder: (context, setSheetState) {
             return AlertDialog(
               backgroundColor: const Color(0xFF202124),
-              title: const Text('Network details', style: TextStyle(color: Colors.white)),
+              title: const Text('Backend Status', style: TextStyle(color: Colors.white)),
               contentPadding: const EdgeInsets.all(24),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
               content: SingleChildScrollView(
@@ -156,7 +157,16 @@ class _CloudPageState extends State<CloudPage> {
                           Text('Device: $deviceName', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
                           IconButton(
                              icon: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white),
-                             onPressed: () {}, // No direct intent to settings in older android versions seamlessly, keep visual as requested
+                             onPressed: () {
+                                try {
+                                  if (Platform.isAndroid) {
+                                     const AndroidIntent intent = AndroidIntent(
+                                        action: 'android.settings.SETTINGS',
+                                     );
+                                     intent.launch();
+                                  }
+                                } catch (_) {}
+                             },
                           )
                        ],
                     )

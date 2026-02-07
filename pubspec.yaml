@@ -49,6 +49,7 @@ dependencies:
   url_launcher: ^6.3.2
   package_info_plus: ^9.0.0
   device_info_plus: ^11.3.0
+  android_intent_plus: ^5.1.4
   http: ^1.1.0
   html: ^0.15.4
 

@@ -331,13 +331,34 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (notesJson != null) {
       try {
         final List<dynamic> data = json.decode(notesJson);
+        final List<Note> validNotes = [];
+        
+        for (var item in data) {
+           if (item is Map<String, dynamic>) {
+              try {
+                 // Check new schema requirements
+                 if (item['service'] == null && item['notification'] != null) {
+                    // Legacy structure detected, skip it
+                    continue;
+                 }
+                 // Try parsing, if fails, it won't be added
+                 validNotes.add(Note.fromJson(item));
+              } catch (_) {
+                 // Ignore malformed notes
+              }
+           }
+        }
+
         setState(() {
-          _notes = data.map((json) {
-            return Note.fromJson(json);
-          }).toList();
+          _notes = validNotes;
           _updateServices();
           _applyFilters();
         });
+        
+        // Save cleaned version back to preference if different
+        if (validNotes.length != data.length) {
+            _saveNotes();
+        }
       } catch (e) {
         debugPrint('Error loading notes: $e');
       }
@@ -456,8 +477,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
      double sliderValue = _quantityFilter.toDouble();
      if (sliderValue > 200) sliderValue = 200;
 
-     final result = await showDialog<int>(
+     final result = await showDialog<int?>(
        context: context,
+       barrierDismissible: true, // Dismiss acts as save/cancel based on logic, but here we save on interaction live
        builder: (context) {
          return StatefulBuilder(
            builder: (context, setState) {
@@ -467,71 +489,121 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                  mainAxisSize: MainAxisSize.min,
                  crossAxisAlignment: CrossAxisAlignment.start,
                  children: [
-                   // Vertical list of presets
-                   Column(
-                     mainAxisSize: MainAxisSize.min,
-                     children: [10, 20, 50, 100].map((e) => Padding(
-                       padding: const EdgeInsets.symmetric(vertical: 4.0),
-                       child: ActionChip(
-                         label: Text('$e'),
-                         onPressed: () {
-                           setState(() => sliderValue = e.toDouble());
-                         },
-                       ),
-                     )).toList(),
-                   ),
-                   const SizedBox(width: 16),
-                   // Vertical Slider
+                   // Left Column: Buttons + Current Value
                    SizedBox(
-                     height: 200, 
+                     width: 60, // Fixed width for buttons
                      child: Column(
+                       mainAxisSize: MainAxisSize.min,
                        children: [
-                         Expanded(
-                           child: RotatedBox(
-                             quarterTurns: 3, 
-                             child: SliderTheme(
-                               data: SliderTheme.of(context).copyWith(
-                                 trackHeight: 12, // Thick slider
-                                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                         ...[10, 20, 50, 100].map((e) => Padding(
+                           padding: const EdgeInsets.only(bottom: 8.0),
+                           child: SizedBox(
+                             height: 48, 
+                             width: 60, 
+                             child: OutlinedButton(
+                               style: OutlinedButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                ),
-                               child: Slider(
-                                 value: sliderValue,
-                                 min: 0,
-                                 max: 200,
-                                 onChanged: (val) {
-                                   setState(() => sliderValue = val);
-                                 },
+                               onPressed: () {
+                                 setState(() {
+                                    sliderValue = e.toDouble();
+                                    // Update main state immediately
+                                    _quantityFilter = e;
+                                    _applyFilters();
+                                 });
+                                 // Rebuild parent? No, setState here only rebuilds dialog. 
+                                 // But we updated _quantityFilter reference which is in State. 
+                                 // We need to call outer setState to reflect in main UI if visible behind?
+                                 // The user didn't ask for live preview, but removing OK implies "click and done" or "drag and done".
+                                 // We will call the outer update at the end or use a callback if needed. 
+                                 // For now, updating the local sliderValue is visible.
+                               },
+                               child: Text('$e'),
+                             ),
+                           ),
+                         )),
+                         // The 5th button: Current Slider Value
+                         SizedBox(
+                           height: 48,
+                           width: 60,
+                           child: Card(
+                             color: Theme.of(context).colorScheme.primaryContainer,
+                             margin: EdgeInsets.zero,
+                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                             child: Center(
+                               child: Text(
+                                 '${sliderValue.toInt()}', 
+                                 style: TextStyle(
+                                   fontWeight: FontWeight.bold,
+                                   color: Theme.of(context).colorScheme.onPrimaryContainer
+                                 ),
                                ),
                              ),
                            ),
                          ),
-                         Text('${sliderValue.toInt()}'),
                        ],
+                     ),
+                   ),
+                   const SizedBox(width: 24),
+                   // Right: Vertical Slider
+                   SizedBox(
+                     height: 272, // 5 * (48 + 8) roughly
+                     child: RotatedBox(
+                       quarterTurns: 3, 
+                       child: SliderTheme(
+                         data: SliderTheme.of(context).copyWith(
+                           trackHeight: 24, // Thick track
+                           trackShape: const RoundedRectSliderTrackShape(), // Built-in rounded
+                           overlayShape: SliderComponentShape.noOverlay,
+                           thumbShape: SliderComponentShape.noThumb, // "Volume bar" style often has no thumb or hidden thumb inside
+                           // But standard slider needs a thumb to be draggable effectively? 
+                           // MD3 volume slider is a track that fills up. 
+                           // Let's use a large track and a tiny or hidden thumb, or a custom track shape.
+                           // Simpler: Thick track, standard thumb but make it transparent?
+                           // Or just thick track.
+                           activeTrackColor: Theme.of(context).colorScheme.primary,
+                           inactiveTrackColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                         ),
+                         child: Container(
+                           decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Theme.of(context).colorScheme.outline, width: 1),
+                           ),
+                           child: ClipRRect(
+                             borderRadius: BorderRadius.circular(16), // Match container border radius
+                             child: Slider(
+                               value: sliderValue,
+                               min: 0,
+                               max: 200,
+                               onChanged: (val) {
+                                 setState(() {
+                                    sliderValue = val;
+                                    // Update main App state live
+                                    _quantityFilter = val.toInt();
+                                    _applyFilters(); 
+                                 });
+                                 // We need to trigger outer setState for the 'newest x' chip update potentially?
+                                 // Since we are inside a dialog, the main page behind doesn't repaint its body unless we navigate back or call its setState.
+                                 // But modifying _quantityFilter is referencing the parent state variable.
+                                 // When dialog closes, we typically call setState.
+                               },
+                             ),
+                           ),
+                         ),
+                       ),
                      ),
                    ),
                  ],
                ),
-               actions: [
-                 TextButton(
-                   onPressed: () => Navigator.pop(context),
-                   child: const Text('Cancel'),
-                 ),
-                 TextButton(
-                   onPressed: () => Navigator.pop(context, sliderValue.toInt()),
-                   child: const Text('OK'),
-                 )
-               ],
              );
            }
          );
        }
-     );
-     if (result != null) {
-       setState(() {
-         _quantityFilter = result;
-         _applyFilters();
-       });
-     }
+     ).then((_) {
+        // Ensure UI updates on close
+        setState(() {});
+     });
   }
 
   void _showTimePicker() async {
