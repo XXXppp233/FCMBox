@@ -209,12 +209,15 @@ class _CloudPageState extends State<CloudPage> {
 
   Future<void> _checkBackend() async {
     if (_backendUrl.isEmpty) return;
+    
+    // Strip protocol if present
+    String cleanUrl = _backendUrl.replaceAll(RegExp(r'^https?://'), '');
 
     setState(() {
       _isLoading = true;
     });
 
-    final uri = Uri.parse(_useHttps ? 'https://$_backendUrl' : 'http://$_backendUrl');
+    final uri = Uri.parse(_useHttps ? 'https://$cleanUrl' : 'http://$cleanUrl');
     Uri targetUri = uri;
     Map<String, String> headers = {};
     if (_authKey.isNotEmpty) {
@@ -223,7 +226,7 @@ class _CloudPageState extends State<CloudPage> {
 
     if (_ipAddress.isNotEmpty) {
       targetUri = uri.replace(host: _ipAddress);
-      headers['Host'] = _backendUrl;
+      headers['Host'] = cleanUrl;
     }
 
     try {

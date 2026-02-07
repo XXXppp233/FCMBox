@@ -413,13 +413,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           return;
        }
 
-       final uri = Uri.parse((useHttps ? 'https://' : 'http://') + url);
+       String cleanUrl = url.replaceAll(RegExp(r'^https?://'), '');
+       final uri = Uri.parse((useHttps ? 'https://' : 'http://') + cleanUrl);
        Uri targetUri = uri;
        Map<String, String> headers = {'Content-Type': 'application/json'};
        if (auth != null && auth.isNotEmpty) headers['Authorization'] = auth;
        if (ip != null && ip.isNotEmpty) {
            targetUri = uri.replace(host: ip);
-           headers['Host'] = url;
+           headers['Host'] = cleanUrl;
        }
 
        final body = json.encode({
@@ -547,8 +548,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                    ),
                    const SizedBox(width: 24),
                    // Right: Vertical Slider
-                   SizedBox(
-                     height: 272, // 5 * (48 + 8) roughly
+                   Container(
+                     height: 288,
+                     width: 48,
+                     padding: const EdgeInsets.symmetric(vertical: 24), // Add equal padding to resemble margins
                      child: RotatedBox(
                        quarterTurns: 3, 
                        child: SliderTheme(
@@ -693,7 +696,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             if (_services.isNotEmpty) 
               ..._services.map((s) => ListTile(
                 title: Text(s),
-                contentPadding: const EdgeInsets.only(left: 72, right: 16), // Align text to where title would be if icon existed
+                contentPadding: const EdgeInsets.only(left: 16, right: 16), // Align to left edge (standard padding)
                 selected: _selectedService == s,
                 onTap: () {
                   setState(() {
