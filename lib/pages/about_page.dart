@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fcm_box/localization.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -11,21 +10,11 @@ class AboutPage extends StatefulWidget {
 }
 
 class _AboutPageState extends State<AboutPage> {
-  String _version = '';
+  String _version = '1.0';
 
   @override
   void initState() {
     super.initState();
-    _loadVersion();
-  }
-
-  Future<void> _loadVersion() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    if (mounted) {
-      setState(() {
-        _version = '${packageInfo.version}+${packageInfo.buildNumber}';
-      });
-    }
   }
 
   Future<void> _launchUrl(String url) async {
@@ -50,14 +39,10 @@ class _AboutPageState extends State<AboutPage> {
       body: ListView(
         children: [
           const SizedBox(height: 40),
-          CircleAvatar(
+          const CircleAvatar(
             radius: 48,
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            child: Icon(
-              Icons.rss_feed,
-              size: 48,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
-            ),
+            backgroundColor: Colors.transparent,
+            backgroundImage: AssetImage('assets/icon/app_icon.png'),
           ),
           const SizedBox(height: 16),
           Center(
