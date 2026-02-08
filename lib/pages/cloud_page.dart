@@ -29,7 +29,6 @@ class _CloudPageState extends State<CloudPage> {
   String _backendInfo = 'The backend info';
   bool _isConnected = false;
   bool _isLoading = false;
-  bool _isPutting = false;
   File? _faviconFile;
   bool _deleteOldData = false;
 
@@ -305,7 +304,6 @@ class _CloudPageState extends State<CloudPage> {
         await prefs.setBool('backend_active', true);
 
         // 3. PUT Token
-        setState(() => _isPutting = true);
         await _registerToken(targetUri, headers);
       } else {
         throw Exception('Status code ${response.statusCode}');
@@ -318,7 +316,6 @@ class _CloudPageState extends State<CloudPage> {
     } finally {
       setState(() {
         _isLoading = false;
-        _isPutting = false;
       });
     }
   }
@@ -344,6 +341,8 @@ class _CloudPageState extends State<CloudPage> {
         headers: {...baseHeaders, 'Content-Type': 'application/json'},
         body: body,
       );
+
+      if (!mounted) return;
 
       if (response.statusCode != 200 && response.statusCode != 204) {
         Fluttertoast.showToast(
@@ -431,7 +430,7 @@ class _CloudPageState extends State<CloudPage> {
           const SizedBox(height: 40),
 
           ListTile(
-            leading: _isPutting
+            leading: _isLoading
                 ? const SizedBox(
                     width: 24,
                     height: 24,

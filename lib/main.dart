@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fcm_box/models/note.dart';
@@ -305,7 +304,7 @@ class _MyHomePageState extends State<MyHomePage>
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       final note = _addNoteFromMessage(message);
       // Opens app via bubble -> Update based on current Quantity settings
-      if (note != null) {
+      if (note != null && mounted) {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => JsonViewerPage(note: note)),
@@ -315,7 +314,7 @@ class _MyHomePageState extends State<MyHomePage>
     });
 
     FirebaseMessaging.instance.getInitialMessage().then((message) {
-      if (message != null) {
+      if (message != null && mounted) {
         final note = _addNoteFromMessage(message);
         if (note != null) {
           Navigator.push(
@@ -396,7 +395,7 @@ class _MyHomePageState extends State<MyHomePage>
     );
 
     setState(() {
-      _newlyAddedIds.add(newNote.id!);
+      _newlyAddedIds.add(newNote.id);
       _notes.insert(0, newNote);
       _updateServices();
       _applyFilters();
@@ -498,6 +497,7 @@ class _MyHomePageState extends State<MyHomePage>
       final quantityToFetch = quantity ?? _quantityFilter;
 
       if (url == null || url.isEmpty) {
+        if (!mounted) return;
         Fluttertoast.showToast(
           msg:
               AppLocalizations.of(
@@ -558,6 +558,7 @@ class _MyHomePageState extends State<MyHomePage>
         _saveNotes();
 
         if (quantity == null) {
+          if (!mounted) return;
           Fluttertoast.showToast(
             msg:
                 '${AppLocalizations.of(context)?.translate('updated') ?? 'Updated'} ${newNotes.length} ${AppLocalizations.of(context)?.translate('items') ?? 'items'}',
@@ -569,10 +570,12 @@ class _MyHomePageState extends State<MyHomePage>
     } catch (e) {
       debugPrint('Refresh failed: $e');
       if (quantity == null) {
-        Fluttertoast.showToast(
-          msg:
-              '${AppLocalizations.of(context)?.translate('refresh_failed') ?? 'Refresh failed'}: $e',
-        );
+        if (mounted) {
+          Fluttertoast.showToast(
+            msg:
+                '${AppLocalizations.of(context)?.translate('refresh_failed') ?? 'Refresh failed'}: $e',
+          );
+        }
       }
     } finally {
       setState(() => _isLoading = false);
@@ -585,65 +588,31 @@ class _MyHomePageState extends State<MyHomePage>
     double sliderValue = _quantityFilter.toDouble();
     if (sliderValue > 200) sliderValue = 200;
 
-    final result =
-        await showDialog<int?>(
-          context: context,
-          barrierDismissible: true,
-          builder: (context) {
-            return StatefulBuilder(
-              builder: (context, setState) {
-                return AlertDialog(
-                  title: Text(
-                    AppLocalizations.of(
-                          context,
-                        )?.translate('select_quantity') ??
-                        'Select Quantity',
-                  ),
-                  content: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Left Column: Buttons + Current Value
-                      SizedBox(
-                        width: 88,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ...[10, 20, 50, 100].map(
-                              (e) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12.0),
-                                child: SizedBox(
-                                  height: 44,
-                                  width: 88,
-                                  child: OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                      padding: EdgeInsets.zero,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      side: BorderSide(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.outline,
-                                      ),
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        sliderValue = e.toDouble();
-                                        _quantityFilter = e;
-                                        _applyFilters();
-                                      });
-                                    },
-                                    child: Text(
-                                      '$e',
-                                      style: const TextStyle(fontSize: 16),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            // The 5th button: Current Slider Value
-                            SizedBox(
+    await showDialog<int?>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(
+                AppLocalizations.of(context)?.translate('select_quantity') ??
+                    'Select Quantity',
+              ),
+              content: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left Column: Buttons + Current Value
+                  SizedBox(
+                    width: 88,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ...[10, 20, 50, 100].map(
+                          (e) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12.0),
+                            child: SizedBox(
                               height: 44,
                               width: 88,
                               child: OutlinedButton(
@@ -658,120 +627,144 @@ class _MyHomePageState extends State<MyHomePage>
                                     ).colorScheme.outline,
                                   ),
                                 ),
-                                onPressed:
-                                    null, // "Display only" but matched style
+                                onPressed: () {
+                                  setState(() {
+                                    sliderValue = e.toDouble();
+                                    _quantityFilter = e;
+                                    _applyFilters();
+                                  });
+                                },
                                 child: Text(
-                                  '${sliderValue.toInt()}',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
-                                  ),
+                                  '$e',
+                                  style: const TextStyle(fontSize: 16),
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 24),
-                      // Right: Vertical Custom Volume Bar
-                      GestureDetector(
-                        onVerticalDragUpdate: (details) {
-                          final renderBox =
-                              context.findRenderObject() as RenderBox?;
-                          if (renderBox != null) {
-                            // Height check
-                          }
-                        },
-                        child: SizedBox(
-                          height: 268, // (44 * 5) + (12 * 4) = 220 + 48 = 268
-                          width: 88,
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              return GestureDetector(
-                                onVerticalDragUpdate: (details) {
-                                  double newY =
-                                      constraints.maxHeight -
-                                      details.localPosition.dy;
-                                  double newVal =
-                                      (newY / constraints.maxHeight) * 200;
-                                  if (newVal < 0) newVal = 0;
-                                  if (newVal > 200) newVal = 200;
-
-                                  if (newVal.toInt() != _quantityFilter) {
-                                    HapticFeedback.selectionClick();
-                                  }
-
-                                  setState(() {
-                                    sliderValue = newVal;
-                                    _quantityFilter = newVal.toInt();
-                                    _applyFilters();
-                                  });
-                                },
-                                onTapUp: (details) {
-                                  double newY =
-                                      constraints.maxHeight -
-                                      details.localPosition.dy;
-                                  double newVal =
-                                      (newY / constraints.maxHeight) * 200;
-                                  if (newVal < 0) newVal = 0;
-                                  if (newVal > 200) newVal = 200;
-
-                                  if (newVal.toInt() != _quantityFilter) {
-                                    HapticFeedback.selectionClick();
-                                  }
-
-                                  setState(() {
-                                    sliderValue = newVal;
-                                    _quantityFilter = newVal.toInt();
-                                    _applyFilters();
-                                  });
-                                },
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.outline,
-                                    ),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Stack(
-                                    alignment: Alignment.bottomCenter,
-                                    children: [
-                                      // Fill
-                                      Container(
-                                        height:
-                                            (sliderValue / 200) *
-                                            constraints.maxHeight,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primaryContainer,
-                                          borderRadius: BorderRadius.circular(
-                                            15,
-                                          ), // Slightly less than border
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
                           ),
                         ),
-                      ),
-                    ],
+                        // The 5th button: Current Slider Value
+                        SizedBox(
+                          height: 44,
+                          width: 88,
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              side: BorderSide(
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                            ),
+                            onPressed: null, // "Display only" but matched style
+                            child: Text(
+                              '${sliderValue.toInt()}',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
+                  const SizedBox(width: 24),
+                  // Right: Vertical Custom Volume Bar
+                  GestureDetector(
+                    onVerticalDragUpdate: (details) {
+                      final renderBox =
+                          context.findRenderObject() as RenderBox?;
+                      if (renderBox != null) {
+                        // Height check
+                      }
+                    },
+                    child: SizedBox(
+                      height: 268, // (44 * 5) + (12 * 4) = 220 + 48 = 268
+                      width: 88,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return GestureDetector(
+                            onVerticalDragUpdate: (details) {
+                              double newY =
+                                  constraints.maxHeight -
+                                  details.localPosition.dy;
+                              double newVal =
+                                  (newY / constraints.maxHeight) * 200;
+                              if (newVal < 0) newVal = 0;
+                              if (newVal > 200) newVal = 200;
+
+                              if (newVal.toInt() != _quantityFilter) {
+                                HapticFeedback.selectionClick();
+                              }
+
+                              setState(() {
+                                sliderValue = newVal;
+                                _quantityFilter = newVal.toInt();
+                                _applyFilters();
+                              });
+                            },
+                            onTapUp: (details) {
+                              double newY =
+                                  constraints.maxHeight -
+                                  details.localPosition.dy;
+                              double newVal =
+                                  (newY / constraints.maxHeight) * 200;
+                              if (newVal < 0) newVal = 0;
+                              if (newVal > 200) newVal = 200;
+
+                              if (newVal.toInt() != _quantityFilter) {
+                                HapticFeedback.selectionClick();
+                              }
+
+                              setState(() {
+                                sliderValue = newVal;
+                                _quantityFilter = newVal.toInt();
+                                _applyFilters();
+                              });
+                            },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Stack(
+                                alignment: Alignment.bottomCenter,
+                                children: [
+                                  // Fill
+                                  Container(
+                                    height:
+                                        (sliderValue / 200) *
+                                        constraints.maxHeight,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(
+                                        15,
+                                      ), // Slightly less than border
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             );
           },
-        ).then((_) {
-          setState(() {});
-        });
+        );
+      },
+    ).then((_) {
+      setState(() {});
+    });
   }
 
   void _showTimePicker() async {
@@ -1177,7 +1170,7 @@ class _NoteCardNew extends StatelessWidget {
       color: Theme.of(context).cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+        side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
       ),
       child: InkWell(
         onTap: onTap,
@@ -1197,7 +1190,7 @@ class _NoteCardNew extends StatelessWidget {
                       width: 60,
                       height: 60,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (_, _, _) => Container(
                         width: 60,
                         height: 60,
                         color: Colors.grey[300],

@@ -20,3 +20,32 @@ CREATE TABLE tokens (
     device TEXT NOT NULL
 ) WITHOUT ROWID;
 ```
+
+data 支持 JSON 和数组示例
+```
+curl -X POST https://yourworkers.workers.dev -H "Authorization: YOUR_AUTH_HEADER" -H "Content-Type: application/json" -d '{
+  "action": "message",
+  "service": "Github Codespace",
+  "data": "maybe the final update",
+  "image": "https://github.githubassets.com/favicons/favicon-success.png",
+  "overview": "successfully"
+}'
+```
+
+```
+curl -X POST https://yourworkers.workers.dev -H "Authorization: YOUR_AUTH_HEADER" -H "Content-Type: application/json" -d '{
+  "action": "message",
+  "service": "Github Codespace",
+  "data": {
+    "results": "98/100",
+    "fails": [
+        "Joe",
+        "Alice"
+    ]
+  },
+  "image": "https://github.githubassets.com/favicons/favicon-success.png",
+  "overview": "completed with 98/100"
+}'
+```
+
+

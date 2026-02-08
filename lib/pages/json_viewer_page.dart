@@ -10,9 +10,7 @@ class JsonViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Preview'),
-      ),
+      appBar: AppBar(title: const Text('Preview')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -21,9 +19,9 @@ class JsonViewerPage extends StatelessWidget {
             // Header
             Text(
               note.overview,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -42,8 +40,12 @@ class JsonViewerPage extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          DateTime.fromMillisecondsSinceEpoch(note.timestamp).toString(),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                          DateTime.fromMillisecondsSinceEpoch(
+                            note.timestamp,
+                          ).toString(),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: Colors.grey),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -51,18 +53,21 @@ class JsonViewerPage extends StatelessWidget {
                     ),
                   ),
                   if (note.image != null && note.image!.isNotEmpty) ...[
-                     const SizedBox(width: 16),
-                     AspectRatio(
-                       aspectRatio: 1,
-                       child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            note.image!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_,__,___) => Container(color: Colors.grey[200], child: const Icon(Icons.broken_image)),
+                    const SizedBox(width: 16),
+                    AspectRatio(
+                      aspectRatio: 1,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          note.image!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.broken_image),
                           ),
-                       ),
-                     )
+                        ),
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -93,29 +98,29 @@ class JsonViewerPage extends StatelessWidget {
         children: processedData.entries.map<Widget>((entry) {
           final key = entry.key.toString();
           final value = entry.value;
-          
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 key,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Padding(
-                 padding: const EdgeInsets.only(bottom: 16.0),
-                 child: _buildValueRenderer(context, value),
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: _buildValueRenderer(context, value),
               ),
             ],
           );
         }).toList(),
       );
     } else if (processedData is List) {
-       return _buildListRenderer(context, processedData);
+      return _buildListRenderer(context, processedData);
     } else {
-       return _buildParagraphRenderer(context, processedData);
+      return _buildParagraphRenderer(context, processedData);
     }
   }
 
@@ -140,7 +145,10 @@ class JsonViewerPage extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$current. ', style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                '$current. ',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
               Expanded(child: Text(item.toString())),
             ],
           ),
