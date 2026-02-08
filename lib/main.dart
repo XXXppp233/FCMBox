@@ -223,6 +223,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   File? _faviconFile;
   bool _isLoading = false;
+  final Set<String> _newlyAddedIds = {};
 
   @override
   void initState() {
@@ -363,6 +364,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   Note? _addNoteFromMessage(RemoteMessage message) {
     if (message.data.isEmpty) return null;
+    
+    // Deduplication check
+    if (_notes.any((n) => n.id == message.messageId)) return null;
 
     final notification = message.notification;
     final service = notification?.title ?? 'Unknown Service';
@@ -380,6 +384,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     );
 
     setState(() {
+      if (newNote.id != null) {
+          _newlyAddedIds.add(newNote.id!);
+      }
       _notes.insert(0, newNote);
       _updateServices();
       _applyFilters();
@@ -908,10 +915,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   itemCount: _filteredNotes.length,
                   itemBuilder: (context, index) {
                     final note = _filteredNotes[index];
-                    return _NoteCardNew(note: note, 
-                       onTap: () {
-                           Navigator.push(context, MaterialPageRoute(builder: (context) => JsonViewerPage(note: note)));
-                       },
+                    final isNew = note.id != null && _newlyAddedIds.contains(note.id);
+                    
+                    return _AnimatedEntryItem(
+                      animate: isNew,
+                      child: _NoteCardNew(note: note, 
+                         onTap: () {
+                             Navigator.push(context, MaterialPageRoute(builder: (context) => JsonViewerPage(note: note)));
+                         },
+                      ),
                     );
                   },
               ),
@@ -923,6 +935,55 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         onPressed: _refreshFromBackend,
         child: const Icon(Icons.refresh),
       ),
+    );
+  }
+}
+
+class _AnimatedEntryItem extends StatefulWidget {
+  final Widget child;
+  final bool animate;
+
+  const _AnimatedEntryItem({required this.child, required this.animate});
+
+  @override
+  State<_AnimatedEntryItem> createState() => _AnimatedEntryItemState();
+}
+
+class _AnimatedEntryItemState extends State<_AnimatedEntryItem> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+  
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+    
+    if (widget.animate) {
+      _controller.forward();
+    } else {
+      _controller.value = 1.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.animate) return widget.child;
+    
+    return SizeTransition(
+       sizeFactor: _animation,
+       axis: Axis.vertical,
+       axisAlignment: -1.0, 
+       child: FadeTransition(
+         opacity: _animation,
+         child: widget.child
+       )
     );
   }
 }
