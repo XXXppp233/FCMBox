@@ -24,7 +24,7 @@ class _CloudPageState extends State<CloudPage> {
   String _authKey = '';
   String _ipAddress = '';
   bool _useHttps = true;
-  
+
   String _backendTitle = 'The Backend Title';
   String _backendInfo = 'The backend info';
   bool _isConnected = false;
@@ -96,9 +96,15 @@ class _CloudPageState extends State<CloudPage> {
           builder: (context, setSheetState) {
             return AlertDialog(
               backgroundColor: const Color(0xFF202124),
-              title: Text(AppLocalizations.of(context)?.translate('backend_status') ?? 'Backend Status', style: const TextStyle(color: Colors.white)),
+              title: Text(
+                AppLocalizations.of(context)?.translate('backend_status') ??
+                    'Backend Status',
+                style: const TextStyle(color: Colors.white),
+              ),
               contentPadding: const EdgeInsets.all(24),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
               content: SizedBox(
                 width: double.maxFinite,
                 child: SingleChildScrollView(
@@ -107,78 +113,105 @@ class _CloudPageState extends State<CloudPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       TextField(
-                      controller: urlController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Backend URL',
-                        labelStyle: TextStyle(color: Colors.grey[400]),
-                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey[600]!)),
+                        controller: urlController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Backend URL',
+                          labelStyle: TextStyle(color: Colors.grey[400]),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.grey[600]!),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: authController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Authorization',
-                        labelStyle: TextStyle(color: Colors.grey[400]),
-                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey[600]!)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: authController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Authorization',
+                          labelStyle: TextStyle(color: Colors.grey[400]),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.grey[600]!),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    ExpansionTile(
-                       title: const Text('Advanced options', style: TextStyle(color: Colors.white)),
-                       iconColor: Colors.white,
-                       collapsedIconColor: Colors.grey[400],
-                       children: [
+                      const SizedBox(height: 8),
+                      ExpansionTile(
+                        title: const Text(
+                          'Advanced options',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        iconColor: Colors.white,
+                        collapsedIconColor: Colors.grey[400],
+                        children: [
                           TextField(
                             controller: ipController,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               labelText: 'IP Address (Optional)',
                               labelStyle: TextStyle(color: Colors.grey[400]),
-                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey[600]!)),
+                              enabledBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(
+                                  color: Colors.grey[600]!,
+                                ),
+                              ),
                             ),
                           ),
                           SwitchListTile(
-                            title: const Text('Use HTTPS', style: TextStyle(color: Colors.white)),
+                            title: const Text(
+                              'Use HTTPS',
+                              style: TextStyle(color: Colors.white),
+                            ),
                             value: tempHttps,
-                            activeColor: Colors.blue[200],
+                            activeThumbColor: Colors.blue[200],
                             onChanged: (val) {
                               setSheetState(() => tempHttps = val);
                             },
                           ),
-                       ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                       children: [
-                          Text('Device: $deviceName', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Device: $deviceName',
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 12,
+                            ),
+                          ),
                           IconButton(
-                             icon: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white),
-                             onPressed: () {
-                                try {
-                                  if (Platform.isAndroid) {
-                                     const AndroidIntent intent = AndroidIntent(
-                                        action: 'android.settings.SETTINGS',
-                                     );
-                                     intent.launch();
-                                  }
-                                } catch (_) {}
-                             },
-                          )
-                       ],
-                    )
-                  ],
+                            icon: const Icon(
+                              Icons.arrow_forward_ios,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                            onPressed: () {
+                              try {
+                                if (Platform.isAndroid) {
+                                  const AndroidIntent intent = AndroidIntent(
+                                    action: 'android.settings.SETTINGS',
+                                  );
+                                  intent.launch();
+                                }
+                              } catch (_) {}
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              )),
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.grey[400],
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                   child: const Text('Cancel'),
                 ),
@@ -195,9 +228,11 @@ class _CloudPageState extends State<CloudPage> {
                     _checkBackend();
                   },
                   style: ElevatedButton.styleFrom(
-                     backgroundColor: const Color(0xFFA8C7FA),
-                     foregroundColor: const Color(0xFF062E6F),
-                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    backgroundColor: const Color(0xFFA8C7FA),
+                    foregroundColor: const Color(0xFF062E6F),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                   child: const Text('Save'),
                 ),
@@ -211,7 +246,7 @@ class _CloudPageState extends State<CloudPage> {
 
   Future<void> _checkBackend() async {
     if (_backendUrl.isEmpty) return;
-    
+
     // Strip protocol if present
     String cleanUrl = _backendUrl.replaceAll(RegExp(r'^https?://'), '');
 
@@ -236,14 +271,16 @@ class _CloudPageState extends State<CloudPage> {
       final response = await http.get(targetUri, headers: headers);
       if (response.statusCode == 200) {
         final document = html_parser.parse(response.body);
-        String title = document.head?.querySelector('title')?.text ?? 'The Backend Title';
-        String info = document.body?.querySelector('h1')?.text ?? 'The backend info';
+        String title =
+            document.head?.querySelector('title')?.text ?? 'The Backend Title';
+        String info =
+            document.body?.querySelector('h1')?.text ?? 'The backend info';
 
         // 2. GET Favicon
         // Construct favicon URL
-        Uri faviconUri = targetUri.replace(path: '/favicon.ico'); 
+        Uri faviconUri = targetUri.replace(path: '/favicon.ico');
         // If the original URL had a path, we might need to be careful. usage logic implies root.
-        
+
         final faviconResponse = await http.get(faviconUri, headers: headers);
         if (faviconResponse.statusCode == 200) {
           final directory = await getApplicationDocumentsDirectory();
@@ -260,7 +297,7 @@ class _CloudPageState extends State<CloudPage> {
           _backendInfo = info;
           _isConnected = true;
         });
-        
+
         // Save to prefs
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('cloud_title', title);
@@ -270,14 +307,13 @@ class _CloudPageState extends State<CloudPage> {
         // 3. PUT Token
         setState(() => _isPutting = true);
         await _registerToken(targetUri, headers);
-
       } else {
         throw Exception('Status code ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('Backend check failed: $e');
       setState(() {
-         // Keep old title/info if failed
+        // Keep old title/info if failed
       });
     } finally {
       setState(() {
@@ -287,77 +323,95 @@ class _CloudPageState extends State<CloudPage> {
     }
   }
 
-  Future<void> _registerToken(Uri baseUri, Map<String, String> baseHeaders) async {
+  Future<void> _registerToken(
+    Uri baseUri,
+    Map<String, String> baseHeaders,
+  ) async {
     try {
       String? token = await FirebaseMessaging.instance.getToken();
       if (token == null) return;
-      
+
       String deviceName = "Unknown Device";
       if (Platform.isAndroid) {
         AndroidDeviceInfo androidInfo = await DeviceInfoPlugin().androidInfo;
         deviceName = androidInfo.model;
       }
-      
-      final body = json.encode({
-        "device": deviceName,
-        "token": token
-      });
-      
+
+      final body = json.encode({"device": deviceName, "token": token});
+
       final response = await http.put(
-        baseUri, 
-        headers: {...baseHeaders, 'Content-Type': 'application/json'}, 
-        body: body
+        baseUri,
+        headers: {...baseHeaders, 'Content-Type': 'application/json'},
+        body: body,
       );
-      
+
       if (response.statusCode != 200 && response.statusCode != 204) {
-        Fluttertoast.showToast(msg: '${AppLocalizations.of(context)?.translate('token_registration_failed') ?? 'Token registration failed'}: ${response.statusCode}');
+        Fluttertoast.showToast(
+          msg:
+              '${AppLocalizations.of(context)?.translate('token_registration_failed') ?? 'Token registration failed'}: ${response.statusCode}',
+        );
       } else {
-        Fluttertoast.showToast(msg: AppLocalizations.of(context)?.translate('token_registration_success') ?? 'Token registration success');
+        Fluttertoast.showToast(
+          msg:
+              AppLocalizations.of(
+                context,
+              )?.translate('token_registration_success') ??
+              'Token registration success',
+        );
       }
     } catch (e) {
-      Fluttertoast.showToast(msg: '${AppLocalizations.of(context)?.translate('token_registration_error') ?? 'Token registration error'}: $e');
+      Fluttertoast.showToast(
+        msg:
+            '${AppLocalizations.of(context)?.translate('token_registration_error') ?? 'Token registration error'}: $e',
+      );
     }
   }
 
   Future<void> _launchUrl(String url) async {
     final Uri uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-       debugPrint('Could not launch $url');
+      debugPrint('Could not launch $url');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cloud'),
-      ),
+      appBar: AppBar(title: const Text('Cloud')),
       body: ListView(
         children: [
           const SizedBox(height: 40),
           // Dynamic Icon (Favicon or default)
           if (_faviconFile != null)
-             Container(
-               height: 96,
-               width: 96,
-               margin: const EdgeInsets.only(bottom: 16),
-               decoration: const BoxDecoration(shape: BoxShape.circle),
-               child: ClipOval(
-                 child: Image.file(_faviconFile!, fit: BoxFit.contain),
-               ),
-             )
-          else 
+            Container(
+              height: 96,
+              width: 96,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: const BoxDecoration(shape: BoxShape.circle),
+              child: ClipOval(
+                child: Image.file(_faviconFile!, fit: BoxFit.contain),
+              ),
+            )
+          else
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
-               child: CircleAvatar(
+              child: CircleAvatar(
                 radius: 48,
                 backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                child: _isConnected 
-                  ? Icon(Icons.cloud_done, size: 48, color: Theme.of(context).colorScheme.onPrimaryContainer) // Example for connected
-                  : Icon(Icons.cloud_off, size: 48, color: Theme.of(context).colorScheme.onPrimaryContainer), // No network icon
+                child: _isConnected
+                    ? Icon(
+                        Icons.cloud_done,
+                        size: 48,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ) // Example for connected
+                    : Icon(
+                        Icons.cloud_off,
+                        size: 48,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ), // No network icon
               ),
             ),
-            
+
           const SizedBox(height: 16),
           Center(
             child: Text(
@@ -369,20 +423,27 @@ class _CloudPageState extends State<CloudPage> {
           Center(
             child: Text(
               _backendInfo,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
             ),
           ),
           const SizedBox(height: 40),
-          
+
           ListTile(
-            leading: _isPutting 
-              ? const SizedBox(
-                  width: 24, 
-                  height: 24, 
-                  child: CircularProgressIndicator(strokeWidth: 2)
-                ) 
-              : (_isConnected ? const Icon(Icons.check) : const Icon(Icons.close)),
-            title: Text(AppLocalizations.of(context)?.translate('backend_status') ?? 'Backend Status'),
+            leading: _isPutting
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : (_isConnected
+                      ? const Icon(Icons.check)
+                      : const Icon(Icons.close)),
+            title: Text(
+              AppLocalizations.of(context)?.translate('backend_status') ??
+                  'Backend Status',
+            ),
             subtitle: Text(
               _isConnected ? _backendUrl : 'None',
               maxLines: 1,
@@ -390,19 +451,27 @@ class _CloudPageState extends State<CloudPage> {
             ),
             onTap: _showConfigSheet,
           ),
-          
+
           ListTile(
             leading: const Icon(Icons.code),
-            title: Text(AppLocalizations.of(context)?.translate('check_code_sample') ?? 'View a code sample'),
+            title: Text(
+              AppLocalizations.of(context)?.translate('check_code_sample') ??
+                  'View a code sample',
+            ),
             onTap: () {
-              // Link to backendsample/README.md 
+              // Link to backendsample/README.md
               // Assuming this refers to the repo URL as per "About" page logic
-              _launchUrl('https://github.com/XXXppp233/FCMBox/blob/main/backendsample/README.md');
+              _launchUrl(
+                'https://github.com/XXXppp233/FCMBox/blob/main/backendsample/README.md',
+              );
             },
           ),
-          
+
           SwitchListTile(
-            title: Text(AppLocalizations.of(context)?.translate('delete_old_data') ?? 'Delete old data after update'), 
+            title: Text(
+              AppLocalizations.of(context)?.translate('delete_old_data') ??
+                  'Delete old data after update',
+            ),
             value: _deleteOldData,
             onChanged: (val) async {
               setState(() => _deleteOldData = val);

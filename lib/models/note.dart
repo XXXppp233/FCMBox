@@ -13,7 +13,7 @@ class Note {
     required this.overview,
     this.image,
     String? id,
-  }) : id = id ?? '${timestamp}_${service}';
+  }) : id = id ?? '${timestamp}_$service';
 
   factory Note.fromJson(Map<String, dynamic> json) {
     return Note(
@@ -22,7 +22,7 @@ class Note {
       service: json['service'] ?? 'Unknown Service',
       overview: json['overview'] ?? '',
       image: json['image'],
-      id: json['_id']?.toString() ?? json['_local_note_id']?.toString() 
+      id: json['_id']?.toString() ?? json['_local_note_id']?.toString(),
     );
   }
 

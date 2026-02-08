@@ -31,7 +31,7 @@
   "updated": "已更新",
   "items": "条目",
   "refresh_failed": "刷新失败",
-  "token_registration_failed": "Token 注册失败",
-  "token_registration_success": "Token 注册成功",
-  "token_registration_error": "Token 注册错误"
+  "token_registration_failed": "Token 上传失败",
+  "token_registration_success": "Token 上传成功",
+  "token_registration_error": "Token 上传错误"
 }
