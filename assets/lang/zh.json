@@ -26,5 +26,12 @@
   "permissions": "权限",
   "notification_permission": "通知权限",
   "notification_permission_subtitle": "允许应用发送通知",
-  "permission_granted": "权限已授予"
+  "permission_granted": "权限已授予",
+  "backend_not_configured": "未配置后端",
+  "updated": "已更新",
+  "items": "条目",
+  "refresh_failed": "刷新失败",
+  "token_registration_failed": "Token 注册失败",
+  "token_registration_success": "Token 注册成功",
+  "token_registration_error": "Token 注册错误"
 }

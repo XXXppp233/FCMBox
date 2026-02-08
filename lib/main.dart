@@ -23,6 +23,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -209,9 +210,10 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
+class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin, WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final FocusNode _searchFocusNode = FocusNode();
+  late AnimationController _refreshController;
   List<Note> _notes = [];
   List<Note> _filteredNotes = [];
   Set<String> _services = {};
@@ -228,6 +230,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _refreshController = AnimationController(
+      duration: const Duration(seconds: 1),
+      vsync: this,
+    );
     _searchFocusNode.canRequestFocus = false;
     WidgetsBinding.instance.addObserver(this);
     _initApp();
@@ -235,6 +241,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _refreshController.dispose();
     _searchFocusNode.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -296,9 +303,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       final note = _addNoteFromMessage(message);
+      // Opens app via bubble -> Update based on current Quantity settings
       if (note != null) {
         Navigator.push(context, MaterialPageRoute(builder: (context) => JsonViewerPage(note: note)));
-        _refreshFromBackend(quantity: 1, deleteOld: false);
+        _refreshFromBackend(quantity: _quantityFilter, deleteOld: false);
       }
     });
     
@@ -307,7 +315,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
          final note = _addNoteFromMessage(message);
          if (note != null) {
             Navigator.push(context, MaterialPageRoute(builder: (context) => JsonViewerPage(note: note)));
-            _refreshFromBackend(quantity: 1, deleteOld: false);
+            _refreshFromBackend(quantity: _quantityFilter, deleteOld: false);
          }
       }
     });
@@ -470,7 +478,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _refreshFromBackend({int? quantity, bool? deleteOld}) async {
+    if (_isLoading) return;
+    
     setState(() => _isLoading = true);
+    _refreshController.repeat();
+    
     try {
        final prefs = await SharedPreferences.getInstance();
        final url = prefs.getString('backend_url');
@@ -481,7 +493,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
        final quantityToFetch = quantity ?? _quantityFilter;
 
        if (url == null || url.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Backend not configured')));
+          Fluttertoast.showToast(msg: AppLocalizations.of(context)?.translate('backend_not_configured') ?? 'Backend not configured');
           return;
        }
 
@@ -513,17 +525,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                 // If service selected, only delete notes of that service
                 _notes.removeWhere((n) => n.service == _selectedService);
               } else {
-                 // Or verify what logic for "all" 
-                 // Assuming update overwrites everything if no service selected? 
-                 // Or just prepend? "Update ... delete old ... if current designated service ... only delete this service's old"
                  _notes = [];
               }
             }
             
             final existingIds = _notes.map((n) => n.timestamp).toSet(); // Using timestamp as PK
             for (var n in newNotes) {
-               // Assuming logic: if update overwrites, we already cleared relevant notes
-               // If appending, check duplicates
                if (!existingIds.contains(n.timestamp)) {
                  _notes.insert(0, n);
                  existingIds.add(n.timestamp);
@@ -534,20 +541,22 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             _applyFilters();
           });
           _saveNotes();
-          // Suppress snackbar for single updates to avoid spam
+          
           if (quantity == null) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Updated ${newNotes.length} items')));
+              Fluttertoast.showToast(msg: '${AppLocalizations.of(context)?.translate('updated') ?? 'Updated'} ${newNotes.length} ${AppLocalizations.of(context)?.translate('items') ?? 'items'}');
           }
        } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${response.statusCode}')));
+          Fluttertoast.showToast(msg: 'Error: ${response.statusCode}');
        }
     } catch (e) {
        debugPrint('Refresh failed: $e');
        if (quantity == null) {
-           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Refresh failed: $e')));
+           Fluttertoast.showToast(msg: '${AppLocalizations.of(context)?.translate('refresh_failed') ?? 'Refresh failed'}: $e');
        }
     } finally {
        setState(() => _isLoading = false);
+       _refreshController.stop();
+       _refreshController.reset();
     }
   }
 
@@ -932,8 +941,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _refreshFromBackend,
-        child: const Icon(Icons.refresh),
+        onPressed: _isLoading ? null : () => _refreshFromBackend(),
+        child: RotationTransition(
+          turns: _refreshController,
+          child: const Icon(Icons.refresh),
+        ),
       ),
     );
   }

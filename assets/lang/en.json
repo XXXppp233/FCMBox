@@ -26,5 +26,12 @@
   "permissions": "Permissions",
   "notification_permission": "Notification Permission",
   "notification_permission_subtitle": "Allow app to post notifications",
-  "permission_granted": "Permission already granted"
+  "permission_granted": "Permission already granted",
+  "backend_not_configured": "Backend not configured",
+  "updated": "Updated",
+  "items": "items",
+  "refresh_failed": "Refresh failed",
+  "token_registration_failed": "Token registration failed",
+  "token_registration_success": "Token registration successful",
+  "token_registration_error": "Token registration error"
 }

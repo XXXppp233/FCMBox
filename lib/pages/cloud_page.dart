@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:fcm_box/localization.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class CloudPage extends StatefulWidget {
   const CloudPage({super.key});
@@ -309,10 +310,12 @@ class _CloudPageState extends State<CloudPage> {
       );
       
       if (response.statusCode != 200 && response.statusCode != 204) {
-        debugPrint('Token registration failed: ${response.statusCode}');
+        Fluttertoast.showToast(msg: '${AppLocalizations.of(context)?.translate('token_registration_failed') ?? 'Token registration failed'}: ${response.statusCode}');
+      } else {
+        Fluttertoast.showToast(msg: AppLocalizations.of(context)?.translate('token_registration_success') ?? 'Token registration success');
       }
     } catch (e) {
-      debugPrint('Token registration error: $e');
+      Fluttertoast.showToast(msg: '${AppLocalizations.of(context)?.translate('token_registration_error') ?? 'Token registration error'}: $e');
     }
   }
 
