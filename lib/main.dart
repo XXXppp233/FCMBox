@@ -290,14 +290,25 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         );
       }
       _addNoteFromMessage(message);
+      _refreshFromBackend(quantity: 1, deleteOld: false);
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      _addNoteFromMessage(message);
+      final note = _addNoteFromMessage(message);
+      if (note != null) {
+        Navigator.push(context, MaterialPageRoute(builder: (context) => JsonViewerPage(note: note)));
+        _refreshFromBackend(quantity: 1, deleteOld: false);
+      }
     });
     
     FirebaseMessaging.instance.getInitialMessage().then((message) {
-      if (message != null) _addNoteFromMessage(message);
+      if (message != null) {
+         final note = _addNoteFromMessage(message);
+         if (note != null) {
+            Navigator.push(context, MaterialPageRoute(builder: (context) => JsonViewerPage(note: note)));
+            _refreshFromBackend(quantity: 1, deleteOld: false);
+         }
+      }
     });
   }
 
@@ -350,8 +361,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
-  void _addNoteFromMessage(RemoteMessage message) {
-    if (message.data.isEmpty) return;
+  Note? _addNoteFromMessage(RemoteMessage message) {
+    if (message.data.isEmpty) return null;
 
     final notification = message.notification;
     final service = notification?.title ?? 'Unknown Service';
@@ -374,6 +385,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       _applyFilters();
     });
     _saveNotes();
+    return newNote;
   }
 
   Future<void> _loadNotes() async {
@@ -450,7 +462,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _refreshFromBackend() async {
+  Future<void> _refreshFromBackend({int? quantity, bool? deleteOld}) async {
     setState(() => _isLoading = true);
     try {
        final prefs = await SharedPreferences.getInstance();
@@ -458,7 +470,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
        final auth = prefs.getString('backend_auth');
        final useHttps = prefs.getBool('backend_https') ?? true;
        final ip = prefs.getString('backend_ip');
-       final deleteOld = prefs.getBool('delete_old_data') ?? false;
+       final deleteOldSetting = deleteOld ?? (prefs.getBool('delete_old_data') ?? false);
+       final quantityToFetch = quantity ?? _quantityFilter;
 
        if (url == null || url.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Backend not configured')));
@@ -477,7 +490,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
        final body = json.encode({
          "action": "get",
-         "quantity": _quantityFilter,
+         "quantity": quantityToFetch,
          "service": _selectedService // current or null
        });
 
@@ -488,7 +501,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           final List<Note> newNotes = responseData.map((item) => Note.fromJson(item)).toList();
           
           setState(() {
-            if (deleteOld) {
+            if (deleteOldSetting) {
               if (_selectedService != null) {
                 // If service selected, only delete notes of that service
                 _notes.removeWhere((n) => n.service == _selectedService);
@@ -514,13 +527,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             _applyFilters();
           });
           _saveNotes();
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Updated ${newNotes.length} items')));
+          // Suppress snackbar for single updates to avoid spam
+          if (quantity == null) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Updated ${newNotes.length} items')));
+          }
        } else {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${response.statusCode}')));
        }
     } catch (e) {
        debugPrint('Refresh failed: $e');
-       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Refresh failed: $e')));
+       if (quantity == null) {
+           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Refresh failed: $e')));
+       }
     } finally {
        setState(() => _isLoading = false);
     }
