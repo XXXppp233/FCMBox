@@ -22,13 +22,14 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:device_info_plus/device_info_plus.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  if (message.notification == null && message.data.isEmpty) {
+  if (message.data.isEmpty) {
     return;
   }
 
@@ -266,6 +267,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   void _setupFCM() {
     if (Firebase.apps.isEmpty) return;
 
+    FirebaseMessaging.instance.onTokenRefresh.listen(_onTokenRefresh);
+
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       RemoteNotification? notification = message.notification;
       AndroidNotification? android = message.notification?.android;
@@ -298,8 +301,57 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _onTokenRefresh(String newToken) async {
+    final prefs = await SharedPreferences.getInstance();
+    final String backendUrl = prefs.getString('backend_url') ?? '';
+    
+    if (backendUrl.isEmpty) return;
+
+    final String authKey = prefs.getString('backend_auth') ?? '';
+    final String ipAddress = prefs.getString('backend_ip') ?? '';
+    final bool useHttps = prefs.getBool('backend_https') ?? true;
+
+    // Strip protocol if present in stored URL
+    String cleanUrl = backendUrl.replaceAll(RegExp(r'^https?://'), '');
+    final uri = Uri.parse(useHttps ? 'https://$cleanUrl' : 'http://$cleanUrl');
+    Uri targetUri = uri;
+    Map<String, String> headers = {};
+    
+    if (authKey.isNotEmpty) {
+      headers['Authorization'] = authKey;
+    }
+
+    if (ipAddress.isNotEmpty) {
+      targetUri = uri.replace(host: ipAddress);
+      headers['Host'] = cleanUrl;
+    }
+
+    try {
+      String deviceName = "Unknown Device";
+      if (Platform.isAndroid) {
+         try {
+           AndroidDeviceInfo androidInfo = await DeviceInfoPlugin().androidInfo;
+           deviceName = androidInfo.model;
+         } catch (_) {}
+      }
+      
+      final body = json.encode({
+        "device": deviceName,
+        "token": newToken
+      });
+      
+      await http.put(
+        targetUri, 
+        headers: {...headers, 'Content-Type': 'application/json'}, 
+        body: body
+      );
+    } catch (e) {
+      debugPrint('Token refresh sync failed: $e');
+    }
+  }
+
   void _addNoteFromMessage(RemoteMessage message) {
-    if (message.notification == null && message.data.isEmpty) return;
+    if (message.data.isEmpty) return;
 
     final notification = message.notification;
     final service = notification?.title ?? 'Unknown Service';
@@ -485,26 +537,26 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
          return StatefulBuilder(
            builder: (context, setState) {
              return AlertDialog(
-               title: const Text('Select Quantity'),
+               title: Text(AppLocalizations.of(context)?.translate('select_quantity') ?? 'Select Quantity'),
                content: Row(
                  mainAxisSize: MainAxisSize.min,
                  crossAxisAlignment: CrossAxisAlignment.start,
                  children: [
                    // Left Column: Buttons + Current Value
                    SizedBox(
-                     width: 60, 
+                     width: 88, 
                      child: Column(
                        mainAxisSize: MainAxisSize.min,
                        children: [
                          ...[10, 20, 50, 100].map((e) => Padding(
-                           padding: const EdgeInsets.only(bottom: 8.0),
+                           padding: const EdgeInsets.only(bottom: 12.0),
                            child: SizedBox(
-                             height: 40,
-                             width: 60,
+                             height: 44,
+                             width: 88,
                              child: OutlinedButton(
                                style: OutlinedButton.styleFrom(
                                   padding: EdgeInsets.zero,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                   side: BorderSide(color: Theme.of(context).colorScheme.outline),
                                ),
                                onPressed: () {
@@ -514,24 +566,25 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                     _applyFilters();
                                  });
                                },
-                               child: Text('$e'),
+                               child: Text('$e', style: const TextStyle(fontSize: 16)),
                              ),
                            ),
                          )),
                          // The 5th button: Current Slider Value
                          SizedBox(
-                           height: 40,
-                           width: 60,
+                           height: 44,
+                           width: 88,
                            child: OutlinedButton(
                              style: OutlinedButton.styleFrom(
                                 padding: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 side: BorderSide(color: Theme.of(context).colorScheme.outline),
                              ),
                              onPressed: null, // "Display only" but matched style
                              child: Text(
                                '${sliderValue.toInt()}', 
                                style: TextStyle(
+                                 fontSize: 16,
                                  fontWeight: FontWeight.bold,
                                  color: Theme.of(context).colorScheme.onSurface
                                ),
@@ -547,19 +600,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                      onVerticalDragUpdate: (details) {
                        final renderBox = context.findRenderObject() as RenderBox?;
                        if (renderBox != null) {
-                          // Height of the bar container is fixed at 232 (5*40 + 4*8)
-                          // To map drag to 0-200.
-                          // Actually we need local position relative to the bar.
-                          // GestureDetector provides localPosition but that's local to the widget.
-                          // Since we are inside the widget builder, context is valid.
-                          // But simpler: use layout height
+                          // Height check
                        }
-                       // Using LayoutBuilder inside might be overkill for simple fixed geometry
-                       // Let's assume height 232 (approx matching buttons height)
                      },
                      child: SizedBox(
-                        height: 232, // (40 * 5) + (8 * 4) = 200 + 32 = 232
-                        width: 38, // 1/6 of 232 is ~38.6
+                        height: 268, // (44 * 5) + (12 * 4) = 220 + 48 = 268
+                        width: 88, 
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                              return GestureDetector(
@@ -598,7 +644,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                child: Container(
                                  decoration: BoxDecoration(
                                     border: Border.all(color: Theme.of(context).colorScheme.outline),
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(16),
                                  ),
                                  child: Stack(
                                    alignment: Alignment.bottomCenter,
@@ -608,7 +654,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                        height: (sliderValue / 200) * constraints.maxHeight,
                                        decoration: BoxDecoration(
                                           color: Theme.of(context).colorScheme.primaryContainer,
-                                          borderRadius: BorderRadius.circular(11), // Slightly less than border
+                                          borderRadius: BorderRadius.circular(15), // Slightly less than border
                                        ),
                                      ),
                                    ],
@@ -679,7 +725,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             ),
             ListTile(
               leading: const Icon(Icons.cloud),
-              title: const Text('Cloud'),
+              title: Text(AppLocalizations.of(context)?.translate('cloud') ?? 'Cloud'),
               onTap: () { 
                 Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const CloudPage())).then((_) => _loadFavicon());

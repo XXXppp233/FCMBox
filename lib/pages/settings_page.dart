@@ -17,8 +17,8 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  String _leftSwipeAction = 'archive';
-  String _rightSwipeAction = 'delete';
+  // String _leftSwipeAction = 'archive'; // Removed
+  // String _rightSwipeAction = 'delete'; // Removed
   bool _useMonet = false;
   int _selectedColorValue = Colors.blue.toARGB32();
   String _languageCode = 'en';
@@ -78,8 +78,8 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _leftSwipeAction = prefs.getString('left_swipe_action') ?? 'archive';
-      _rightSwipeAction = prefs.getString('right_swipe_action') ?? 'delete';
+      // _leftSwipeAction = prefs.getString('left_swipe_action') ?? 'archive';
+      // _rightSwipeAction = prefs.getString('right_swipe_action') ?? 'delete';
       _useMonet = prefs.getBool('use_monet') ?? false;
       _selectedColorValue =
           prefs.getInt('theme_color') ?? Colors.deepPurple.toARGB32();
@@ -98,6 +98,8 @@ class _SettingsPageState extends State<SettingsPage> {
     localeSettingsNotifier.value = LocaleSettings(Locale(code));
   }
 
+  // Swipe actions removed
+  /*
   Future<void> _saveLeftSwipeAction(String action) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('left_swipe_action', action);
@@ -113,6 +115,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _rightSwipeAction = action;
     });
   }
+  */
 
   Future<void> _saveUseMonet(bool value) async {
     final prefs = await SharedPreferences.getInstance();
@@ -325,82 +328,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     _showColorPicker(context);
                   },
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              'Swipe Actions',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.swipe_left),
-            title: Text(
-              AppLocalizations.of(context)?.translate('left_swipe_action') ??
-                  'Left Swipe',
-            ),
-            trailing: DropdownButton<String>(
-              value: _leftSwipeAction,
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  _saveLeftSwipeAction(newValue);
-                }
-              },
-              items: <String>['archive', 'delete']
-                  .map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        value == 'archive'
-                            ? (AppLocalizations.of(
-                                    context,
-                                  )?.translate('archive') ??
-                                  'Archive')
-                            : (AppLocalizations.of(
-                                    context,
-                                  )?.translate('delete') ??
-                                  'Delete'),
-                      ),
-                    );
-                  })
-                  .toList(),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.swipe_right),
-            title: Text(
-              AppLocalizations.of(context)?.translate('right_swipe_action') ??
-                  'Right Swipe',
-            ),
-            trailing: DropdownButton<String>(
-              value: _rightSwipeAction,
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  _saveRightSwipeAction(newValue);
-                }
-              },
-              items: <String>['archive', 'delete']
-                  .map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        value == 'archive'
-                            ? (AppLocalizations.of(
-                                    context,
-                                  )?.translate('archive') ??
-                                  'Archive')
-                            : (AppLocalizations.of(
-                                    context,
-                                  )?.translate('delete') ??
-                                  'Delete'),
-                      ),
-                    );
-                  })
-                  .toList(),
-            ),
-          ),
+          // Swipe actions removed
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(

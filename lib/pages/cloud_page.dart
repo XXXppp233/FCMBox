@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:fcm_box/localization.dart';
 
 class CloudPage extends StatefulWidget {
   const CloudPage({super.key});
@@ -94,7 +95,7 @@ class _CloudPageState extends State<CloudPage> {
           builder: (context, setSheetState) {
             return AlertDialog(
               backgroundColor: const Color(0xFF202124),
-              title: const Text('Backend Status', style: TextStyle(color: Colors.white)),
+              title: Text(AppLocalizations.of(context)?.translate('backend_status') ?? 'Backend Status', style: const TextStyle(color: Colors.white)),
               contentPadding: const EdgeInsets.all(24),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
               content: SizedBox(
@@ -378,7 +379,7 @@ class _CloudPageState extends State<CloudPage> {
                   child: CircularProgressIndicator(strokeWidth: 2)
                 ) 
               : (_isConnected ? const Icon(Icons.check) : const Icon(Icons.close)),
-            title: const Text('Backend Status'),
+            title: Text(AppLocalizations.of(context)?.translate('backend_status') ?? 'Backend Status'),
             subtitle: Text(
               _isConnected ? _backendUrl : 'None',
               maxLines: 1,
@@ -389,7 +390,7 @@ class _CloudPageState extends State<CloudPage> {
           
           ListTile(
             leading: const Icon(Icons.code),
-            title: const Text('View a code sample'),
+            title: Text(AppLocalizations.of(context)?.translate('check_code_sample') ?? 'View a code sample'),
             onTap: () {
               // Link to backendsample/README.md 
               // Assuming this refers to the repo URL as per "About" page logic
@@ -398,7 +399,7 @@ class _CloudPageState extends State<CloudPage> {
           ),
           
           SwitchListTile(
-            title: const Text('更新后删除旧数据'), // "Delete old data after update"
+            title: Text(AppLocalizations.of(context)?.translate('delete_old_data') ?? 'Delete old data after update'), 
             value: _deleteOldData,
             onChanged: (val) async {
               setState(() => _deleteOldData = val);
