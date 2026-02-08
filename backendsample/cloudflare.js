@@ -104,7 +104,7 @@ export default {
     if (request.method == "PUT"){
       const body = await request.json()
       if (body.token != undefined && body.device != undefined){
-        await env.DB.prepare('INSERT INTO tokens (token, device) VALUES (?, ?)').bind(body.token, body.device).run()
+        await env.DB.prepare('INSERT INTO tokens (token, device) VALUES (?, ?) ON CONFLICT(token) DO UPDATE SET device = excluded.device').bind(body.token, body.device).run()
         return new Response("success")
       }else {
         return new Response("Invalid Method")

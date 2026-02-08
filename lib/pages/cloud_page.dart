@@ -379,7 +379,11 @@ class _CloudPageState extends State<CloudPage> {
                 ) 
               : (_isConnected ? const Icon(Icons.check) : const Icon(Icons.close)),
             title: const Text('Backend Status'),
-            subtitle: Text(_isConnected ? _backendUrl : 'None'),
+            subtitle: Text(
+              _isConnected ? _backendUrl : 'None',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             onTap: _showConfigSheet,
           ),
           

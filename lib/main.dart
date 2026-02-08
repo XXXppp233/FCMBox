@@ -480,7 +480,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
      final result = await showDialog<int?>(
        context: context,
-       barrierDismissible: true, // Dismiss acts as save/cancel based on logic, but here we save on interaction live
+       barrierDismissible: true,
        builder: (context) {
          return StatefulBuilder(
            builder: (context, setState) {
@@ -492,33 +492,27 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                  children: [
                    // Left Column: Buttons + Current Value
                    SizedBox(
-                     width: 60, // Fixed width for buttons
+                     width: 60, 
                      child: Column(
                        mainAxisSize: MainAxisSize.min,
                        children: [
                          ...[10, 20, 50, 100].map((e) => Padding(
                            padding: const EdgeInsets.only(bottom: 8.0),
                            child: SizedBox(
-                             height: 48, 
-                             width: 60, 
+                             height: 40,
+                             width: 60,
                              child: OutlinedButton(
                                style: OutlinedButton.styleFrom(
                                   padding: EdgeInsets.zero,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  side: BorderSide(color: Theme.of(context).colorScheme.outline),
                                ),
                                onPressed: () {
                                  setState(() {
                                     sliderValue = e.toDouble();
-                                    // Update main state immediately
                                     _quantityFilter = e;
                                     _applyFilters();
                                  });
-                                 // Rebuild parent? No, setState here only rebuilds dialog. 
-                                 // But we updated _quantityFilter reference which is in State. 
-                                 // We need to call outer setState to reflect in main UI if visible behind?
-                                 // The user didn't ask for live preview, but removing OK implies "click and done" or "drag and done".
-                                 // We will call the outer update at the end or use a callback if needed. 
-                                 // For now, updating the local sliderValue is visible.
                                },
                                child: Text('$e'),
                              ),
@@ -526,19 +520,20 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                          )),
                          // The 5th button: Current Slider Value
                          SizedBox(
-                           height: 48,
+                           height: 40,
                            width: 60,
-                           child: Card(
-                             color: Theme.of(context).colorScheme.primaryContainer,
-                             margin: EdgeInsets.zero,
-                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                             child: Center(
-                               child: Text(
-                                 '${sliderValue.toInt()}', 
-                                 style: TextStyle(
-                                   fontWeight: FontWeight.bold,
-                                   color: Theme.of(context).colorScheme.onPrimaryContainer
-                                 ),
+                           child: OutlinedButton(
+                             style: OutlinedButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                side: BorderSide(color: Theme.of(context).colorScheme.outline),
+                             ),
+                             onPressed: null, // "Display only" but matched style
+                             child: Text(
+                               '${sliderValue.toInt()}', 
+                               style: TextStyle(
+                                 fontWeight: FontWeight.bold,
+                                 color: Theme.of(context).colorScheme.onSurface
                                ),
                              ),
                            ),
@@ -547,54 +542,81 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                      ),
                    ),
                    const SizedBox(width: 24),
-                   // Right: Vertical Slider
-                   Container(
-                     height: 288,
-                     width: 48,
-                     padding: const EdgeInsets.symmetric(vertical: 24), // Add equal padding to resemble margins
-                     child: RotatedBox(
-                       quarterTurns: 3, 
-                       child: SliderTheme(
-                         data: SliderTheme.of(context).copyWith(
-                           trackHeight: 24, // Thick track
-                           trackShape: const RoundedRectSliderTrackShape(), // Built-in rounded
-                           overlayShape: SliderComponentShape.noOverlay,
-                           thumbShape: SliderComponentShape.noThumb, // "Volume bar" style often has no thumb or hidden thumb inside
-                           // But standard slider needs a thumb to be draggable effectively? 
-                           // MD3 volume slider is a track that fills up. 
-                           // Let's use a large track and a tiny or hidden thumb, or a custom track shape.
-                           // Simpler: Thick track, standard thumb but make it transparent?
-                           // Or just thick track.
-                           activeTrackColor: Theme.of(context).colorScheme.primary,
-                           inactiveTrackColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                         ),
-                         child: Container(
-                           decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Theme.of(context).colorScheme.outline, width: 1),
-                           ),
-                           child: ClipRRect(
-                             borderRadius: BorderRadius.circular(16), // Match container border radius
-                             child: Slider(
-                               value: sliderValue,
-                               min: 0,
-                               max: 200,
-                               onChanged: (val) {
-                                 setState(() {
-                                    sliderValue = val;
-                                    // Update main App state live
-                                    _quantityFilter = val.toInt();
-                                    _applyFilters(); 
-                                 });
-                                 // We need to trigger outer setState for the 'newest x' chip update potentially?
-                                 // Since we are inside a dialog, the main page behind doesn't repaint its body unless we navigate back or call its setState.
-                                 // But modifying _quantityFilter is referencing the parent state variable.
-                                 // When dialog closes, we typically call setState.
+                   // Right: Vertical Custom Volume Bar
+                   GestureDetector(
+                     onVerticalDragUpdate: (details) {
+                       final renderBox = context.findRenderObject() as RenderBox?;
+                       if (renderBox != null) {
+                          // Height of the bar container is fixed at 232 (5*40 + 4*8)
+                          // To map drag to 0-200.
+                          // Actually we need local position relative to the bar.
+                          // GestureDetector provides localPosition but that's local to the widget.
+                          // Since we are inside the widget builder, context is valid.
+                          // But simpler: use layout height
+                       }
+                       // Using LayoutBuilder inside might be overkill for simple fixed geometry
+                       // Let's assume height 232 (approx matching buttons height)
+                     },
+                     child: SizedBox(
+                        height: 232, // (40 * 5) + (8 * 4) = 200 + 32 = 232
+                        width: 38, // 1/6 of 232 is ~38.6
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                             return GestureDetector(
+                               onVerticalDragUpdate: (details) {
+                                  double newY = constraints.maxHeight - details.localPosition.dy;
+                                  double newVal = (newY / constraints.maxHeight) * 200;
+                                  if (newVal < 0) newVal = 0;
+                                  if (newVal > 200) newVal = 200;
+
+                                  if (newVal.toInt() != _quantityFilter) {
+                                     HapticFeedback.selectionClick();
+                                  }
+
+                                  setState(() {
+                                     sliderValue = newVal;
+                                     _quantityFilter = newVal.toInt();
+                                     _applyFilters();
+                                  });
                                },
-                             ),
-                           ),
-                         ),
-                       ),
+                               onTapUp: (details) {
+                                  double newY = constraints.maxHeight - details.localPosition.dy;
+                                  double newVal = (newY / constraints.maxHeight) * 200;
+                                  if (newVal < 0) newVal = 0;
+                                  if (newVal > 200) newVal = 200;
+
+                                  if (newVal.toInt() != _quantityFilter) {
+                                     HapticFeedback.selectionClick();
+                                  }
+
+                                  setState(() {
+                                     sliderValue = newVal;
+                                     _quantityFilter = newVal.toInt();
+                                     _applyFilters();
+                                  });
+                               },
+                               child: Container(
+                                 decoration: BoxDecoration(
+                                    border: Border.all(color: Theme.of(context).colorScheme.outline),
+                                    borderRadius: BorderRadius.circular(12),
+                                 ),
+                                 child: Stack(
+                                   alignment: Alignment.bottomCenter,
+                                   children: [
+                                     // Fill
+                                     Container(
+                                       height: (sliderValue / 200) * constraints.maxHeight,
+                                       decoration: BoxDecoration(
+                                          color: Theme.of(context).colorScheme.primaryContainer,
+                                          borderRadius: BorderRadius.circular(11), // Slightly less than border
+                                       ),
+                                     ),
+                                   ],
+                                 ),
+                               ),
+                             );
+                          },
+                        ),
                      ),
                    ),
                  ],
@@ -604,7 +626,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
          );
        }
      ).then((_) {
-        // Ensure UI updates on close
         setState(() {});
      });
   }
@@ -777,6 +798,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               child: Row(children: [
                  if (_selectedService != null)
                    InputChip(
+                     selected: true,
+                     showCheckmark: false,
                      label: Text(_selectedService!),
                      onDeleted: () {
                        setState(() {
@@ -795,11 +818,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                    ),
                  const SizedBox(width: 8),
                  ActionChip(
-                   label: Text('Newest $_quantityFilter'),
+                   label: Text('$_quantityFilter'),
                    onPressed: _showQuantityPicker,
                  ),
                  const SizedBox(width: 8),
                  InputChip(
+                   selected: _timeFilterStart != null,
+                   showCheckmark: false,
                    label: Text(_timeFilterStart == null ? 'Select Time' : DateTime.fromMillisecondsSinceEpoch(_timeFilterStart!).toString().split(' ')[0]),
                    onPressed: _showTimePicker,
                    onDeleted: _timeFilterStart != null ? () {
