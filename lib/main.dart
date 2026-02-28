@@ -11,6 +11,7 @@ import 'package:fcm_box/pages/search_page.dart';
 import 'package:fcm_box/theme_settings.dart';
 import 'package:fcm_box/localization.dart';
 import 'package:fcm_box/locale_settings.dart';
+import 'package:fcm_box/db/notes_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -34,15 +35,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 
   await Firebase.initializeApp();
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.reload();
-  final String? notesJson = prefs.getString('notes');
-  List<dynamic> data = [];
-  if (notesJson != null) {
-    try {
-      data = json.decode(notesJson);
-    } catch (_) {}
-  }
 
   // Extract data for new model
   final notification = message.notification;
@@ -52,18 +44,16 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-  // Create map matching Note.toJson()
-  final newNoteMap = {
-    'timestamp': timestamp,
-    'data': message.data,
-    'service': service,
-    'overview': overview,
-    'image': image,
-    '_id': message.messageId ?? '${timestamp}_$service',
-  };
+  final newNote = Note(
+    timestamp: timestamp,
+    data: message.data,
+    service: service,
+    overview: overview,
+    image: image,
+    id: message.messageId,
+  );
 
-  data.insert(0, newNoteMap);
-  await prefs.setString('notes', json.encode(data));
+  await DatabaseHelper.instance.create(newNote);
 }
 
 void main() async {
@@ -394,67 +384,36 @@ class _MyHomePageState extends State<MyHomePage>
       id: message.messageId,
     );
 
+    // Save to DB asynchronously
+    DatabaseHelper.instance.create(newNote).then((_) {
+      // Success
+    });
+
     setState(() {
       _newlyAddedIds.add(newNote.id);
       _notes.insert(0, newNote);
       _updateServices();
       _applyFilters();
     });
-    _saveNotes();
+
     return newNote;
   }
 
   Future<void> _loadNotes() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.reload();
-    final String? notesJson = prefs.getString('notes');
-    if (notesJson != null) {
-      try {
-        final List<dynamic> data = json.decode(notesJson);
-        final List<Note> validNotes = [];
-
-        for (var item in data) {
-          if (item is Map<String, dynamic>) {
-            try {
-              // Check new schema requirements
-              if (item['service'] == null && item['notification'] != null) {
-                // Legacy structure detected, skip it
-                continue;
-              }
-              // Try parsing, if fails, it won't be added
-              validNotes.add(Note.fromJson(item));
-            } catch (_) {
-              // Ignore malformed notes
-            }
-          }
-        }
-
-        setState(() {
-          _notes = validNotes;
-          _updateServices();
-          _applyFilters();
-        });
-
-        // Save cleaned version back to preference if different
-        if (validNotes.length != data.length) {
-          _saveNotes();
-        }
-      } catch (e) {
-        debugPrint('Error loading notes: $e');
-      }
+    try {
+      final notes = await DatabaseHelper.instance.readAllNotes();
+      setState(() {
+        _notes = notes;
+        _updateServices();
+        _applyFilters();
+      });
+    } catch (e) {
+      debugPrint('Error loading notes from DB: $e');
     }
   }
 
   void _updateServices() {
     _services = _notes.map((n) => n.service).toSet();
-  }
-
-  Future<void> _saveNotes() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String notesJson = json.encode(
-      _notes.map((n) => n.toJson()).toList(),
-    );
-    await prefs.setString('notes', notesJson);
   }
 
   void _applyFilters() {
@@ -532,30 +491,49 @@ class _MyHomePageState extends State<MyHomePage>
             .map((item) => Note.fromJson(item))
             .toList();
 
-        setState(() {
-          if (deleteOldSetting) {
-            if (_selectedService != null) {
-              // If service selected, only delete notes of that service
+        if (deleteOldSetting) {
+          if (_selectedService != null) {
+            await DatabaseHelper.instance.deleteByService(_selectedService!);
+            setState(() {
               _notes.removeWhere((n) => n.service == _selectedService);
-            } else {
+            });
+          } else {
+            await DatabaseHelper.instance.deleteAll();
+            setState(() {
               _notes = [];
-            }
+            });
           }
+        }
 
-          final existingIds = _notes
-              .map((n) => n.timestamp)
-              .toSet(); // Using timestamp as PK
-          for (var n in newNotes) {
-            if (!existingIds.contains(n.timestamp)) {
-              _notes.insert(0, n);
-              existingIds.add(n.timestamp);
-            }
+        final existingIds = _notes.map((n) => n.timestamp).toSet();
+        final List<Note> notesToInsert = [];
+
+        for (var n in newNotes) {
+          if (!existingIds.contains(n.timestamp)) {
+            notesToInsert.add(n);
+            existingIds.add(n.timestamp);
           }
+        }
 
+        if (notesToInsert.isNotEmpty) {
+          await DatabaseHelper.instance.insertBatch(notesToInsert);
+          setState(() {
+            _notes.insertAll(0, notesToInsert);
+            // Sort again just in case, though insertAll(0) puts them at top implies they are newer if list was sorted
+            // We must sort here after updating _notes
+            _notes.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          });
+        }
+
+        if (deleteOldSetting) {
+          // Already handled async above
+        }
+
+        // Final UI refresh
+        setState(() {
           _updateServices();
           _applyFilters();
         });
-        _saveNotes();
 
         if (quantity == null) {
           if (!mounted) return;

@@ -53,6 +53,8 @@ dependencies:
   android_intent_plus: ^5.1.4
   http: ^1.1.0
   html: ^0.15.4
+  sqflite: ^2.4.2
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
@@ -64,12 +66,12 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.14.3
 
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/icon/app_icon.png"
+  image_path: "assets/icon/mode_heat.png"
   min_sdk_android: 21
 
 # For information on the generic Dart part of this file, see the

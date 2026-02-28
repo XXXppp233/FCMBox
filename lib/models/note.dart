@@ -25,33 +25,4 @@ class Note {
       id: json['_id']?.toString() ?? json['_local_note_id']?.toString(),
     );
   }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'timestamp': timestamp,
-      'data': data,
-      'service': service,
-      'overview': overview,
-      'image': image,
-      '_id': id,
-    };
-  }
-
-  Note copyWith({
-    int? timestamp,
-    dynamic data,
-    String? service,
-    String? overview,
-    String? image,
-    String? id,
-  }) {
-    return Note(
-      timestamp: timestamp ?? this.timestamp,
-      data: data ?? this.data,
-      service: service ?? this.service,
-      overview: overview ?? this.overview,
-      image: image ?? this.image,
-      id: id ?? this.id,
-    );
-  }
 }
