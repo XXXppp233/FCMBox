@@ -1,116 +1,115 @@
-const AUTH_HEADER = "YOUR_AUTH_HEADER"
-const ALTER_IMG = `YOUR_ALTERNATE_IMAGE_URL`
+const ALTER_IMG = `https://img.icons8.com/clouds/100/fire-element.png`
 
 
 export default {
   async fetch(request, env, ctx) {
-    // You can view your logs in the Observability dashboard
-    const auth = request.headers.get('Authorization')
-    if (auth != AUTH_HEADER){
-      return new Response("Auth Fail", {status: 403})
-    }
-    if (request.method == "GET"){
-      const url = new URL(request.url)
-      if (url.pathname == "/favicon.ico"){
-        const cfico = `https://img.icons8.com/external-tal-revivo-filled-tal-revivo/96/external-cloudflare-provides-content-delivery-network-services-ddos-mitigation-logo-filled-tal-revivo.png`
-        return Response.redirect(cfico, 302)
+    const auth = request.headers.get('Authorization');
+    const url = new URL(request.url);
+
+    // --- GET 请求处理 (公开访问) ---
+    if (request.method === "GET") {
+      if (url.pathname === "/favicon.ico") {
+        const cfico = `https://img.icons8.com/external-tal-revivo-filled-tal-revivo/96/external-cloudflare-provides-content-delivery-network-services-ddos-mitigation-logo-filled-tal-revivo.png`;
+        return Response.redirect(cfico, 302);
       }
-      const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Cloudflare Workers</title>
-          <meta charset="utf-8">
-        </head>
-        <body>
-          <h1>Hellooooo Wooooorld</h1>
-        </body>
-      </html>
-      `
-      return new Response(html, {
-        headers: {
-          "Content-Type": "text/html;charset=UTF-8",
-        },
-      });
+      const html = `<!DOCTYPE html><html><head><title>Cloudflare Workers</title><meta charset="utf-8"></head><body><h1>Service Active</h1></body></html>`;
+      return new Response(html, { headers: { "Content-Type": "text/html;charset=UTF-8" } });
     }
-    if (request.method == "POST"){
-      const body = await request.json()
-      
-      if(body.action == "message"){
-        const data = body.data || null
-        const overview = body.overview || "Null Overview"
-        const service = body.service || "Null Service"
-        const image = body.image || null  //`https://img.icons8.com/clouds/100/fire-element.png`
-        // write to D1 SQL
-        await env.DB.prepare('INSERT INTO main (timestamp, data, service, overview, image) VALUES (?, ?, ?, ?, ?)').bind(
+
+    // --- 权限校验 (针对 POST 和 PUT) ---
+    if (!auth) {
+      return new Response("Missing Authorization", { status: 401 });
+    }
+
+    // --- POST 请求处理 ---
+    if (request.method === "POST") {
+      const body = await request.json();
+
+      // Action: Message (写入日志并推送)
+      if (body.action === "message") {
+        const { data, overview = "Null Overview", service = "Null Service", image = null } = body;
+
+        // 1. 写入 D1 (包含 authorization 列)
+        await env.DB.prepare(
+          'INSERT INTO main (timestamp, data, service, overview, image, authorization) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(
           Date.now(),
           typeof data === 'object' ? JSON.stringify(data) : data || null,
-          service || null,
+          service,
           overview,
-          image
-        ).run()
-        
-        // FCM Sender
+          image,
+          auth // 记录该条消息属于哪个用户
+        ).run();
+
+        // 2. FCM 推送逻辑
         const saJson = await env.KV.get('service-account');
         if (saJson) {
           const serviceAccount = JSON.parse(saJson);
-    
-          // 1. 从 D1 获取所有 Token
-          const { results: tokenRows } = await env.DB.prepare('SELECT device, token FROM tokens').all();
+          // 从 users 表获取该 auth 对应的所有 tokens
+          const userRow = await env.DB.prepare('SELECT tokens, devices FROM users WHERE authorization = ?').bind(auth).first();
 
-          if (tokenRows && tokenRows.length > 0) {
-          // 2. 并发构造推送任务
-          const tasks = tokenRows.map(async (row) => {
-            const success = await FCMSender(
-                serviceAccount, 
-                row.token, 
-                overview, 
-                service, 
-                image || ALTER_IMG
-            );
-
-            // 3. 如果发送失败，输出并清理
-            if (!success) {
-                console.log(`Fail to send to ${row.device}, rm token`);
-                // 异步清理 D1 中的失效 Token，不阻塞其他任务
-                ctx.waitUntil(
-                    env.DB.prepare('DELETE FROM tokens WHERE device = ?').bind(row.device).run()
-                    );
-            }
-        });
-        // 4. 使用 waitUntil 确保所有并发请求在 Worker 关闭前完成
-        ctx.waitUntil(Promise.allSettled(tasks));
-      }
-    }
-    return new Response("success");
-      }
-      if(body.action == "get"){
-        const quantity = body.quantity || 5  // default is the latest 5 logs
-        const service = body.service || null
-        if (service != null){
-          const logs = await env.DB.prepare('SELECT * FROM main WHERE service = ? ORDER BY timestamp DESC LIMIT ?').bind(service, quantity).all()
-          console.log("Get ",quantity, "logs about ", service)
-          return new Response(JSON.stringify(logs.results))
+          if (userRow && userRow.tokens) {
+            const tokenList = userRow.tokens.split(';').filter(t => t);
+            const tasks = tokenList.map(async (token) => {
+              return await FCMSender(serviceAccount, token, overview, service, image || ALTER_IMG);
+            });
+            // 这里暂不处理单个 token 失效的自动删除，因为字符串拼接逻辑较复杂，建议定期手动清理或在前端更新
+            ctx.waitUntil(Promise.allSettled(tasks));
+          }
         }
-        else{
-          const logs = await env.DB.prepare('SELECT * FROM main ORDER BY timestamp DESC LIMIT ?').bind(quantity).all()
-          console.log("Get ",quantity, "logs")
-          return new Response(JSON.stringify(logs.results))
+        return new Response("success");
+      }
+
+      // Action: Get (查询日志)
+      if (body.action === "get") {
+        const quantity = body.quantity || 5;
+        const service = body.service || null;
+
+        let query, params;
+        if (service) {
+          query = 'SELECT * FROM main WHERE authorization = ? AND service = ? ORDER BY timestamp DESC LIMIT ?';
+          params = [auth, service, quantity];
+        } else {
+          query = 'SELECT * FROM main WHERE authorization = ? ORDER BY timestamp DESC LIMIT ?';
+          params = [auth, quantity];
         }
 
+        const logs = await env.DB.prepare(query).bind(...params).all();
+        return new Response(JSON.stringify(logs.results), { headers: { "Content-Type": "application/json" } });
       }
-      return new Response("hellooooo Wooooorld!")
     }
-    if (request.method == "PUT"){
-      const body = await request.json()
-      if (body.token != undefined && body.device != undefined){
-        await env.DB.prepare('INSERT INTO tokens (token, device) VALUES (?, ?) ON CONFLICT(token) DO UPDATE SET device = excluded.device').bind(body.token, body.device).run()
-        return new Response("success")
-      }else {
-        return new Response("Invalid Method")
+
+    // --- PUT 请求处理 (注册/更新 Token) ---
+    if (request.method === "PUT") {
+      const body = await request.json();
+      const { token, device } = body;
+
+      if (!token || !device) return new Response("Invalid Payload", { status: 400 });
+      if (device.includes(';')) return new Response("Device name cannot contain ';'", { status: 400 });
+
+      // 获取现有数据
+      const user = await env.DB.prepare('SELECT tokens, devices FROM users WHERE authorization = ?').bind(auth).first();
+
+      if (user) {
+        let tokens = user.tokens ? user.tokens.split(';') : [];
+        let devices = user.devices ? user.devices.split(';') : [];
+
+        // 如果 token 不在列表中，则添加
+        if (!tokens.includes(token)) {
+          tokens.push(token);
+          devices.push(device);
+          await env.DB.prepare('UPDATE users SET tokens = ?, devices = ? WHERE authorization = ?')
+            .bind(tokens.join(';'), devices.join(';'), auth)
+            .run();
+        }
+        return new Response("updated");
+      } else {
+        // 如果用户不存在，可能需要先通过注册流程创建用户，或者直接在此创建（取决于你的业务逻辑）
+        return new Response("User not found. Please register first.", { status: 404 });
       }
-      
     }
+
+    return new Response("Invalid Method", { status: 405 });
   }
 };
 

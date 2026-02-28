@@ -23,7 +23,7 @@ CREATE TABLE tokens (
 
 data 支持 JSON 和数组示例
 ```
-curl -X POST https://yourworkers.workers.dev -H "Authorization: YOUR_AUTH_HEADER" -H "Content-Type: application/json" -d '{
+curl -X POST https://yourworkers.workers.dev -H "Authorization: $YOUR_AUTH_HEADER" -H "Content-Type: application/json" -d '{
   "action": "message",
   "service": "Github Codespace",
   "data": "maybe the final update",
