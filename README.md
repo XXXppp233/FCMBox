@@ -2,6 +2,9 @@
 
 A Flutter project could recevie FCM from custom Project.
 
+## 完整的 FCM Box 介绍
+[FCM Box Guide](https://docs.wepayto.win/application/fcmbox/)
+
 ## Getting Started
 
 - You can build this app with your keystore to avoid Play Store alert.

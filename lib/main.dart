@@ -12,6 +12,7 @@ import 'package:fcm_box/theme_settings.dart';
 import 'package:fcm_box/localization.dart';
 import 'package:fcm_box/locale_settings.dart';
 import 'package:fcm_box/db/notes_database.dart';
+import 'package:fcm_box/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -24,6 +25,27 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+
+// ... (other imports)
+
+// Helper for caching
+Future<void> _cacheImage(String? url) async {
+  if (url == null || url.isEmpty) return;
+  try {
+    // Check if already cached
+    final existing = await DatabaseHelper.instance.getImage(url);
+    if (existing != null) return;
+
+    // Download and cache
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      final base64Image = base64Encode(response.bodyBytes);
+      await DatabaseHelper.instance.saveImage(url, base64Image);
+    }
+  } catch (e) {
+    debugPrint('Error caching image: $e');
+  }
+}
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -41,6 +63,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final service = notification?.title ?? 'Unknown Service';
   final overview = notification?.body ?? '';
   final image = notification?.android?.imageUrl ?? message.data['image'];
+
+  if (image != null) {
+    await _cacheImage(image);
+  }
 
   final timestamp = DateTime.now().millisecondsSinceEpoch;
 
@@ -377,6 +403,13 @@ class _MyHomePageState extends State<MyHomePage>
     final image = notification?.android?.imageUrl ?? message.data['image'];
     final timestamp = DateTime.now().millisecondsSinceEpoch;
 
+    // Cache in background
+    if (image != null) {
+      _cacheImage(image).then((_) {
+        if (mounted) setState(() {}); // Trigger rebuild to show cached image
+      });
+    }
+
     final newNote = Note(
       timestamp: timestamp,
       data: message.data,
@@ -518,14 +551,32 @@ class _MyHomePageState extends State<MyHomePage>
         }
 
         if (notesToInsert.isNotEmpty) {
+          // Insert notes first
           await DatabaseHelper.instance.insertBatch(notesToInsert);
+
+          // Trigger image caching for new notes
+          for (var note in notesToInsert) {
+            if (note.image != null && note.image!.isNotEmpty) {
+              _cacheImage(note.image!);
+            }
+          }
+
           setState(() {
             _notes.insertAll(0, notesToInsert);
-            // Sort again just in case, though insertAll(0) puts them at top implies they are newer if list was sorted
-            // We must sort here after updating _notes
             _notes.sort((a, b) => b.timestamp.compareTo(a.timestamp));
           });
         }
+
+        // Clean up unused images
+        // We collect all valid image URLs from current notes
+        final allActiveUrls = _notes
+            .map((n) => n.image)
+            .where((url) => url != null && url.isNotEmpty)
+            .cast<String>()
+            .toList();
+
+        // Asynchronously delete unused images
+        DatabaseHelper.instance.deleteUnusedImages(allActiveUrls);
 
         if (deleteOldSetting) {
           // Already handled async above
@@ -1165,16 +1216,28 @@ class _NoteCardNew extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 12.0),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      note.image!,
+                    child: CachedNetworkImage(
+                      imageUrl: note.image!,
                       width: 60,
                       height: 60,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Container(
+                      errorWidget: Container(
                         width: 60,
                         height: 60,
                         color: Colors.grey[300],
                         child: const Icon(Icons.image_not_supported),
+                      ),
+                      placeholder: Container(
+                        width: 60,
+                        height: 60,
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
                       ),
                     ),
                   ),

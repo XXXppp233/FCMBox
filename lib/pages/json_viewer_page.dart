@@ -1,3 +1,4 @@
+import 'package:fcm_box/cached_network_image.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:fcm_box/models/note.dart';
@@ -58,10 +59,10 @@ class JsonViewerPage extends StatelessWidget {
                       aspectRatio: 1,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          note.image!,
+                        child: CachedNetworkImage(
+                          imageUrl: note.image!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(
+                          errorWidget: Container(
                             color: Colors.grey[200],
                             child: const Icon(Icons.broken_image),
                           ),

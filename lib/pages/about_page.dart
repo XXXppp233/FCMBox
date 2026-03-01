@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fcm_box/localization.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -21,9 +22,7 @@ class _AboutPageState extends State<AboutPage> {
     final Uri uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Could not launch $url')));
+        Fluttertoast.showToast(msg: 'Could not launch $url');
       }
     }
   }

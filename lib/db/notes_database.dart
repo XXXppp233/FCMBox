@@ -19,7 +19,12 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _createDB,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -32,6 +37,85 @@ CREATE TABLE notes (
   image TEXT
 )
     ''');
+    _createImageCacheTable(db);
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createImageCacheTable(db);
+    }
+  }
+
+  Future<void> _createImageCacheTable(Database db) async {
+    await db.execute('''
+CREATE TABLE image_cache (
+  url TEXT PRIMARY KEY,
+  base64 TEXT NOT NULL
+)
+    ''');
+  }
+
+  Future<void> saveImage(String url, String base64) async {
+    final db = await instance.database;
+    await db.insert('image_cache', {
+      'url': url,
+      'base64': base64,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<String?> getImage(String url) async {
+    final db = await instance.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'image_cache',
+      columns: ['base64'],
+      where: 'url = ?',
+      whereArgs: [url],
+    );
+    if (maps.isNotEmpty) {
+      return maps.first['base64'] as String;
+    }
+    return null;
+  }
+
+  Future<void> deleteUnusedImages(List<String> activeUrls) async {
+    final db = await instance.database;
+    if (activeUrls.isEmpty) {
+      await db.delete('image_cache');
+      return;
+    }
+
+    // To handle large numbers of active URLs without hitting SQLite argument limits:
+    // 1. Get all cached URLs.
+    // 2. Identify which ones are NOT in the active list.
+    // 3. Delete those specific URLs.
+
+    final List<Map<String, dynamic>> result = await db.query(
+      'image_cache',
+      columns: ['url'],
+    );
+    final cachedUrls = result.map((r) => r['url'] as String).toSet();
+    final activeUrlSet = activeUrls.toSet();
+
+    final urlsToDelete = cachedUrls.difference(activeUrlSet).toList();
+
+    const int batchSize = 900;
+    for (var i = 0; i < urlsToDelete.length; i += batchSize) {
+      final end = (i + batchSize < urlsToDelete.length)
+          ? i + batchSize
+          : urlsToDelete.length;
+      final batch = urlsToDelete.sublist(i, end);
+      final placeholders = List.filled(batch.length, '?').join(',');
+      await db.delete(
+        'image_cache',
+        where: 'url IN ($placeholders)',
+        whereArgs: batch,
+      );
+    }
+  }
+
+  Future<void> deleteImage(String url) async {
+    final db = await instance.database;
+    await db.delete('image_cache', where: 'url = ?', whereArgs: [url]);
   }
 
   Future<int> create(Note note) async {

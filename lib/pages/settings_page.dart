@@ -4,8 +4,7 @@ import 'package:fcm_box/theme_settings.dart';
 import 'package:fcm_box/localization.dart';
 import 'package:fcm_box/locale_settings.dart';
 import 'package:permission_handler/permission_handler.dart';
-// import 'package:fcm_box/services/google_drive_service.dart';
-// import 'package:google_sign_in/google_sign_in.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class SettingsPage extends StatefulWidget {
   final Future<void> Function()? onSync;
@@ -78,8 +77,6 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      // _leftSwipeAction = prefs.getString('left_swipe_action') ?? 'archive';
-      // _rightSwipeAction = prefs.getString('right_swipe_action') ?? 'delete';
       _useMonet = prefs.getBool('use_monet') ?? false;
       _selectedColorValue =
           prefs.getInt('theme_color') ?? Colors.deepPurple.toARGB32();
@@ -97,25 +94,6 @@ class _SettingsPageState extends State<SettingsPage> {
     });
     localeSettingsNotifier.value = LocaleSettings(Locale(code));
   }
-
-  // Swipe actions removed
-  /*
-  Future<void> _saveLeftSwipeAction(String action) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('left_swipe_action', action);
-    setState(() {
-      _leftSwipeAction = action;
-    });
-  }
-
-  Future<void> _saveRightSwipeAction(String action) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('right_swipe_action', action);
-    setState(() {
-      _rightSwipeAction = action;
-    });
-  }
-  */
 
   Future<void> _saveUseMonet(bool value) async {
     final prefs = await SharedPreferences.getInstance();
@@ -389,55 +367,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 openAppSettings();
               } else {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
+                  Fluttertoast.showToast(
+                    msg:
                         AppLocalizations.of(
-                              context,
-                            )?.translate('permission_granted') ??
-                            'Permission already granted',
-                      ),
-                    ),
+                          context,
+                        )?.translate('permission_granted') ??
+                        'Permission already granted',
                   );
                 }
               }
             },
           ),
-
-          /*
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              AppLocalizations.of(context)?.translate('sync') ?? 'Sync',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.cloud_upload),
-            title: Text(AppLocalizations.of(context)?.translate('google_drive') ?? 'Google Drive'),
-            subtitle: Text(_currentUser != null 
-              ? '${AppLocalizations.of(context)?.translate('connected_as') ?? 'Connected as'} ${_currentUser!.email}' 
-              : (AppLocalizations.of(context)?.translate('not_connected') ?? 'Not connected')),
-            trailing: _currentUser != null
-                ? IconButton(
-                    icon: const Icon(Icons.logout),
-                    onPressed: _handleSignOut,
-                  )
-                : IconButton(
-                    icon: const Icon(Icons.login),
-                    onPressed: _handleSignIn,
-                  ),
-          ),
-          if (_currentUser != null)
-            ListTile(
-              leading: const Icon(Icons.sync),
-              title: Text(AppLocalizations.of(context)?.translate('sync_now') ?? 'Sync Now'),
-              onTap: _handleSync,
-            ),
-          */
         ],
       ),
     );
