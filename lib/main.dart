@@ -39,8 +39,7 @@ Future<void> _cacheImage(String? url) async {
     // Download and cache
     final response = await http.get(Uri.parse(url));
     if (response.statusCode == 200) {
-      final base64Image = base64Encode(response.bodyBytes);
-      await DatabaseHelper.instance.saveImage(url, base64Image);
+      await DatabaseHelper.instance.saveImage(url, response.bodyBytes);
     }
   } catch (e) {
     debugPrint('Error caching image: $e');

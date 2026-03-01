@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:fcm_box/db/notes_database.dart';
-import 'dart:convert';
 import 'dart:typed_data';
 
 class CachedNetworkImage extends StatefulWidget {
@@ -43,15 +42,14 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
     try {
       final cached = await DatabaseHelper.instance.getImage(widget.imageUrl);
       if (cached != null) {
-        return base64Decode(cached);
+        return cached;
       }
 
       final response = await http.get(Uri.parse(widget.imageUrl));
       if (response.statusCode == 200) {
         final bytes = response.bodyBytes;
-        final base64String = base64Encode(bytes);
         // Save in background
-        DatabaseHelper.instance.saveImage(widget.imageUrl, base64String);
+        DatabaseHelper.instance.saveImage(widget.imageUrl, bytes);
         return bytes;
       }
     } catch (e) {

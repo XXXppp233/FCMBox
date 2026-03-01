@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 import '../models/note.dart';
 
 class DatabaseHelper {
@@ -21,7 +22,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -43,6 +44,9 @@ CREATE TABLE notes (
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await _createImageCacheTable(db);
+    } else if (oldVersion < 3) {
+      await db.execute('DROP TABLE IF EXISTS image_cache');
+      await _createImageCacheTable(db);
     }
   }
 
@@ -50,29 +54,29 @@ CREATE TABLE notes (
     await db.execute('''
 CREATE TABLE image_cache (
   url TEXT PRIMARY KEY,
-  base64 TEXT NOT NULL
+  data BLOB NOT NULL
 )
     ''');
   }
 
-  Future<void> saveImage(String url, String base64) async {
+  Future<void> saveImage(String url, Uint8List data) async {
     final db = await instance.database;
     await db.insert('image_cache', {
       'url': url,
-      'base64': base64,
+      'data': data,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<String?> getImage(String url) async {
+  Future<Uint8List?> getImage(String url) async {
     final db = await instance.database;
     final List<Map<String, dynamic>> maps = await db.query(
       'image_cache',
-      columns: ['base64'],
+      columns: ['data'],
       where: 'url = ?',
       whereArgs: [url],
     );
     if (maps.isNotEmpty) {
-      return maps.first['base64'] as String;
+      return maps.first['data'] as Uint8List;
     }
     return null;
   }
