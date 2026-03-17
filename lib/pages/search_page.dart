@@ -118,7 +118,9 @@ class _SearchPageState extends State<SearchPage> {
         return note.service.toLowerCase().contains(query);
       }).toList();
       _contentResults = _allNotes.where((note) {
-        return note.overview.toLowerCase().contains(query);
+        final overviewMatch = note.overview.toLowerCase().contains(query);
+        final dataMatch = note.data != null && note.data.toString().toLowerCase().contains(query);
+        return overviewMatch || dataMatch;
       }).toList();
     });
   }

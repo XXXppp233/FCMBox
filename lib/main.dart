@@ -6,6 +6,7 @@ import 'package:fcm_box/models/note.dart';
 import 'package:fcm_box/pages/settings_page.dart';
 import 'package:fcm_box/pages/about_page.dart';
 import 'package:fcm_box/pages/cloud_page.dart';
+import 'package:fcm_box/pages/fcm_status_page.dart';
 import 'package:fcm_box/pages/json_viewer_page.dart';
 import 'package:fcm_box/pages/search_page.dart';
 import 'package:fcm_box/theme_settings.dart';
@@ -240,7 +241,7 @@ class _MyHomePageState extends State<MyHomePage>
   int? _timeFilterStart;
   int? _timeFilterEnd;
 
-  File? _faviconFile;
+  String? _faviconUrl;
   bool _isLoading = false;
   final Set<String> _newlyAddedIds = {};
 
@@ -280,13 +281,10 @@ class _MyHomePageState extends State<MyHomePage>
   }
 
   Future<void> _loadFavicon() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/favicon.ico');
-    if (await file.exists()) {
-      setState(() {
-        _faviconFile = file;
-      });
-    }
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _faviconUrl = prefs.getString('cloud_favicon_url');
+    });
   }
 
   void _setupFCM() {
@@ -874,6 +872,27 @@ class _MyHomePageState extends State<MyHomePage>
               },
             ),
             ListTile(
+              leading: const Icon(Icons.monitor_heart),
+              title: const Text('FCM Status'),
+              trailing: Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  color: Colors.green,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const FcmStatusPage(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.settings),
               title: Text(
                 AppLocalizations.of(context)?.translate('settings') ??
@@ -1016,15 +1035,25 @@ class _MyHomePageState extends State<MyHomePage>
                       ).then((_) => _loadFavicon());
                     },
                     borderRadius: BorderRadius.circular(20),
-                    child: CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.transparent,
-                      backgroundImage: _faviconFile != null
-                          ? FileImage(_faviconFile!)
-                          : null,
-                      child: _faviconFile == null
-                          ? const Icon(Icons.cloud_off)
-                          : null,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(shape: BoxShape.circle),
+                      child: _faviconUrl != null && _faviconUrl!.isNotEmpty
+                          ? ClipOval(
+                              child: CachedNetworkImage(
+                                imageUrl: _faviconUrl!,
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                                errorWidget: const Icon(Icons.cloud_off),
+                              ),
+                            )
+                          : const CircleAvatar(
+                              radius: 20,
+                              backgroundColor: Colors.transparent,
+                              child: Icon(Icons.cloud_off),
+                            ),
                     ),
                   ),
                 ],
@@ -1099,6 +1128,7 @@ class _MyHomePageState extends State<MyHomePage>
                         return _AnimatedEntryItem(
                           animate: isNew,
                           child: _NoteCardNew(
+                            key: ValueKey(note.id),
                             note: note,
                             onTap: () {
                               Navigator.push(

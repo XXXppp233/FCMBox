@@ -34,6 +34,14 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
     _loadImage();
   }
 
+  @override
+  void didUpdateWidget(CachedNetworkImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.imageUrl != oldWidget.imageUrl) {
+      _loadImage();
+    }
+  }
+
   void _loadImage() {
     _imageFuture = _processImage();
   }

@@ -3,6 +3,8 @@ import 'package:fcm_box/localization.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
+import 'package:package_info_plus/package_info_plus.dart';
+
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
 
@@ -11,11 +13,19 @@ class AboutPage extends StatefulWidget {
 }
 
 class _AboutPageState extends State<AboutPage> {
-  String _version = '2.0';
+  String _version = '';
 
   @override
   void initState() {
     super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    setState(() {
+      _version = packageInfo.version;
+    });
   }
 
   Future<void> _launchUrl(String url) async {
@@ -41,7 +51,7 @@ class _AboutPageState extends State<AboutPage> {
           const CircleAvatar(
             radius: 48,
             backgroundColor: Colors.transparent,
-            backgroundImage: AssetImage('assets/icon/app_icon.png'),
+            backgroundImage: AssetImage('assets/icon/mode_heat.png'),
           ),
           const SizedBox(height: 16),
           Center(
@@ -51,14 +61,15 @@ class _AboutPageState extends State<AboutPage> {
             ),
           ),
           const SizedBox(height: 8),
-          Center(
-            child: Text(
-              'Version $_version',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+          if (_version.isNotEmpty)
+            Center(
+              child: Text(
+                'Version $_version',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+              ),
             ),
-          ),
           const SizedBox(height: 40),
           ListTile(
             leading: const Icon(Icons.code),

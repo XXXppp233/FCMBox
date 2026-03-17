@@ -11,6 +11,8 @@ import 'package:android_intent_plus/android_intent.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:fcm_box/localization.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:fcm_box/cached_network_image.dart';
+import 'package:fcm_box/db/notes_database.dart';
 
 class CloudPage extends StatefulWidget {
   const CloudPage({super.key});
@@ -29,7 +31,7 @@ class _CloudPageState extends State<CloudPage> {
   String _backendInfo = 'The backend info';
   bool _isConnected = false;
   bool _isLoading = false;
-  File? _faviconFile;
+  String? _faviconUrl;
   bool _deleteOldData = false;
 
   @override
@@ -54,13 +56,10 @@ class _CloudPageState extends State<CloudPage> {
   }
 
   Future<void> _loadFavicon() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/favicon.ico');
-    if (await file.exists()) {
-      setState(() {
-        _faviconFile = file;
-      });
-    }
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _faviconUrl = prefs.getString('cloud_favicon_url');
+    });
   }
 
   Future<void> _saveSettings() async {
@@ -278,15 +277,14 @@ class _CloudPageState extends State<CloudPage> {
         // 2. GET Favicon
         // Construct favicon URL
         Uri faviconUri = targetUri.replace(path: '/favicon.ico');
-        // If the original URL had a path, we might need to be careful. usage logic implies root.
-
+        
         final faviconResponse = await http.get(faviconUri, headers: headers);
         if (faviconResponse.statusCode == 200) {
-          final directory = await getApplicationDocumentsDirectory();
-          final file = File('${directory.path}/favicon.ico');
-          await file.writeAsBytes(faviconResponse.bodyBytes);
+          await DatabaseHelper.instance.saveImage(faviconUri.toString(), faviconResponse.bodyBytes);
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('cloud_favicon_url', faviconUri.toString());
           setState(() {
-            _faviconFile = file;
+            _faviconUrl = faviconUri.toString();
           });
         }
 
@@ -381,14 +379,28 @@ class _CloudPageState extends State<CloudPage> {
         children: [
           const SizedBox(height: 40),
           // Dynamic Icon (Favicon or default)
-          if (_faviconFile != null)
+          if (_faviconUrl != null && _faviconUrl!.isNotEmpty)
             Container(
               height: 96,
               width: 96,
               margin: const EdgeInsets.only(bottom: 16),
               decoration: const BoxDecoration(shape: BoxShape.circle),
               child: ClipOval(
-                child: Image.file(_faviconFile!, fit: BoxFit.contain),
+                child: CachedNetworkImage(
+                  imageUrl: _faviconUrl!,
+                  width: 96,
+                  height: 96,
+                  fit: BoxFit.contain,
+                  errorWidget: CircleAvatar(
+                    radius: 48,
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    child: Icon(
+                      Icons.cloud_off,
+                      size: 48,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
               ),
             )
           else
