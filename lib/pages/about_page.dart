@@ -48,10 +48,13 @@ class _AboutPageState extends State<AboutPage> {
       body: ListView(
         children: [
           const SizedBox(height: 40),
-          const CircleAvatar(
-            radius: 48,
-            backgroundColor: Colors.transparent,
-            backgroundImage: AssetImage('assets/icon/mode_heat.png'),
+          Center(
+            child: Image.asset(
+              'assets/icon/mode_heat.png',
+              width: 96,
+              height: 96,
+              fit: BoxFit.contain,
+            ),
           ),
           const SizedBox(height: 16),
           Center(
