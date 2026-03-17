@@ -74,7 +74,3 @@ jobs:
         with:
           name: app-release-aab
           path: build/app/outputs/bundle/release/app-release.aab
-      - name: Send FCM message
-        env: 
-          FCM_AUTHORIZATION: ${{ secrets.AUTHORIZATION}}
-        run: curl -X POST https://fcmbackend.wepayto.win -H "Authorization: $FCM_AUTHORIZATION" -d '{"action": "message", "service": "Github Action", "overview": "Android Build Complete", "data": "", "image": "https://apac-east1-i.wepayto.win/MD3/check_circle.png"}'
