@@ -872,14 +872,22 @@ class _MyHomePageState extends State<MyHomePage>
             ),
             ListTile(
               leading: const Icon(Icons.monitor_heart),
-              title: const Text('FCM Status'),
-              trailing: Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                ),
+              title: Row(
+                children: [
+                  Text(
+                    AppLocalizations.of(context)?.translate('fcm_status_title') ??
+                        'FCM Status',
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
               ),
               onTap: () {
                 Navigator.pop(context);

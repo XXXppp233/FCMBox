@@ -294,7 +294,7 @@ class _FcmStatusPageState extends State<FcmStatusPage> with WidgetsBindingObserv
             title: Text(tr?.translate('fcm_vpn') ?? 'VPN'),
             subtitle: Text(_isVpnUsed 
               ? '${tr?.translate('fcm_yes') ?? 'Yes'} ($_vpnName)' 
-              : (tr?.translate('fcm_none') ?? 'None')),
+              : 'None'),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -314,12 +314,12 @@ class _FcmStatusPageState extends State<FcmStatusPage> with WidgetsBindingObserv
           ),
           ListTile(
             title: Text(tr?.translate('fcm_host') ?? 'Host'),
-            subtitle: Text(_host),
-            onLongPress: () => _copyToClipboard(_host, tr?.translate('fcm_host') ?? 'Host'),
+            subtitle: Text(_isConnected ? _host : 'None'),
+            onLongPress: _isConnected ? () => _copyToClipboard(_host, tr?.translate('fcm_host') ?? 'Host') : null,
           ),
           ListTile(
             title: Text(tr?.translate('fcm_port') ?? 'Port'),
-            subtitle: Text(_port),
+            subtitle: Text(_isConnected ? _port : 'None'),
           ),
           ListTile(
             title: Text(tr?.translate('fcm_token') ?? 'FCM Token'),
