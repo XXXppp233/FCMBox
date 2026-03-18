@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import '../models/request_record.dart';
 import '../db/notes_database.dart';
 import '../l10n/app_localizations.dart';
@@ -42,53 +44,6 @@ class _RequestPageState extends State<RequestPage> {
       bool matchesMethod = _methodFilter.isEmpty || r.method == _methodFilter;
       return matchesDomain && matchesMethod;
     }).toList();
-  }
-
-  void _showNewRequestDialog({RequestRecord? template}) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'Select Template',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.cloud_upload),
-                  title: const Text('FCM Template'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _openComposer(useFcmTemplate: true);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.insert_drive_file),
-                  title: const Text('Blank Template'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _openComposer(template: template);
-                  },
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   void _openComposer({bool useFcmTemplate = false, RequestRecord? template}) async {
@@ -248,7 +203,7 @@ class _RequestPageState extends State<RequestPage> {
                             );
                           },
                           onLongPress: () {
-                            _showNewRequestDialog(template: record);
+                            _openComposer(template: record);
                           },
                         ),
                       );
@@ -257,9 +212,24 @@ class _RequestPageState extends State<RequestPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showNewRequestDialog(),
-        child: const Icon(Icons.add),
+      floatingActionButton: SpeedDial(
+        icon: Icons.add,
+        activeIcon: Icons.close,
+        spacing: 3,
+        childPadding: const EdgeInsets.all(5),
+        spaceBetweenChildren: 4,
+        children: [
+          SpeedDialChild(
+            child: const Icon(Icons.insert_drive_file),
+            label: 'Blank Template',
+            onTap: () => _openComposer(),
+          ),
+          SpeedDialChild(
+            child: const Icon(Icons.cloud_upload),
+            label: 'FCM Template',
+            onTap: () => _openComposer(useFcmTemplate: true),
+          ),
+        ],
       ),
     );
   }
@@ -292,6 +262,23 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
   final List<Map<String, TextEditingController>> _headers = [];
   bool _isJsonMode = true;
   bool _isSending = false;
+
+  static const List<String> _commonHeaders = [
+    'Accept',
+    'Accept-Encoding',
+    'Accept-Language',
+    'Authorization',
+    'Cache-Control',
+    'Connection',
+    'Content-Length',
+    'Content-Type',
+    'Cookie',
+    'Host',
+    'Origin',
+    'Referer',
+    'User-Agent',
+    'X-Requested-With',
+  ];
 
   @override
   void initState() {
@@ -337,17 +324,45 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
   "data": "This is a test data",
   "image": "https://apac-east1-i.wepayto.win/MD3/check_circle.png"
 }''';
+      _fillDefaultHeaders();
+    } else {
+      _fillDefaultHeaders();
     }
 
     _ensureEmptyHeaderRow();
     setState(() {});
   }
 
+  void _fillDefaultHeaders() {
+    _headers.add({
+      'key': TextEditingController(text: 'User-Agent'),
+      'value': TextEditingController(text: 'FCMBox/1.0'),
+    });
+    _headers.add({
+      'key': TextEditingController(text: 'Accept'),
+      'value': TextEditingController(text: '*/*'),
+    });
+    _headers.add({
+      'key': TextEditingController(text: 'Accept-Encoding'),
+      'value': TextEditingController(text: 'gzip, deflate, br'),
+    });
+    _headers.add({
+      'key': TextEditingController(text: 'Connection'),
+      'value': TextEditingController(text: 'keep-alive'),
+    });
+  }
+
   void _ensureEmptyHeaderRow() {
-    if (_headers.isEmpty || _headers.last['key']!.text.isNotEmpty || _headers.last['value']!.text.isNotEmpty) {
-      _headers.add({
-        'key': TextEditingController(),
-        'value': TextEditingController(),
+    bool shouldAdd = _headers.isEmpty || _headers.last['key']!.text.isNotEmpty || _headers.last['value']!.text.isNotEmpty;
+    if (shouldAdd) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _headers.add({
+            'key': TextEditingController(),
+            'value': TextEditingController(),
+          });
+        });
       });
     }
   }
@@ -405,14 +420,10 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
       await DatabaseHelper.instance.insertRequest(record);
       
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Response: ${response.statusCode}')),
-      );
+      Fluttertoast.showToast(msg: 'Response: ${response.statusCode}');
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      Fluttertoast.showToast(msg: 'Error: $e');
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -436,127 +447,155 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
             ),
         ],
       ),
-      body: Column(
+      body: ListView(
+        padding: const EdgeInsets.all(16.0),
         children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                DropdownButton<String>(
-                  value: _method,
-                  items: ['GET', 'POST', 'PUT', 'DELETE'].map((m) {
-                    return DropdownMenuItem(value: m, child: Text(m));
-                  }).toList(),
-                  onChanged: (v) {
-                    if (v != null) setState(() => _method = v);
-                  },
-                  underline: const SizedBox(),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _urlController,
-                    decoration: const InputDecoration(
-                      hintText: 'https://api.example.com',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                  ),
-                ),
-              ],
+          // URL Section
+          const Text('URL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _urlController,
+            decoration: const InputDecoration(
+              hintText: 'https://api.example.com',
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             ),
           ),
-          Expanded(
-            child: DefaultTabController(
-              length: 2,
-              child: Column(
-                children: [
-                  const TabBar(
-                    tabs: [
-                      Tab(text: 'Headers'),
-                      Tab(text: 'Body'),
-                    ],
-                  ),
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        ListView.builder(
-                          itemCount: _headers.length,
-                          itemBuilder: (context, index) {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _headers[index]['key'],
-                                      decoration: const InputDecoration(hintText: 'Key', isDense: true),
-                                      onChanged: (_) => _ensureEmptyHeaderRow(),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _headers[index]['value'],
-                                      decoration: const InputDecoration(hintText: 'Value', isDense: true),
-                                      onChanged: (_) => _ensureEmptyHeaderRow(),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.close, size: 20),
-                                    onPressed: index == _headers.length - 1 && _headers[index]['key']!.text.isEmpty && _headers[index]['value']!.text.isEmpty 
-                                      ? null 
-                                      : () {
-                                          setState(() {
-                                            _headers.removeAt(index);
-                                            _ensureEmptyHeaderRow();
-                                          });
-                                        },
-                                  )
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                        Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                const Text('JSON'),
-                                Switch(
-                                  value: _isJsonMode,
-                                  onChanged: (v) => setState(() => _isJsonMode = v),
-                                ),
-                                const Text('RAW'),
-                                const SizedBox(width: 16),
-                              ],
-                            ),
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: TextField(
-                                  controller: _bodyController,
-                                  maxLines: null,
-                                  expands: true,
-                                  textAlignVertical: TextAlignVertical.top,
-                                  decoration: const InputDecoration(
-                                    hintText: 'Request Body',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  style: const TextStyle(fontFamily: 'monospace'),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+          const SizedBox(height: 16),
+          
+          // Method Section
+          const Text('Method', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: Theme.of(context).colorScheme.outline),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                value: _method,
+                items: ['GET', 'POST', 'PUT', 'DELETE'].map((m) {
+                  return DropdownMenuItem(value: m, child: Text(m));
+                }).toList(),
+                onChanged: (v) {
+                  if (v != null) setState(() => _method = v);
+                },
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          
+          // Headers Section
+          const Text('Headers', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _headers.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Autocomplete<String>(
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          if (textEditingValue.text.isEmpty) {
+                            return const Iterable<String>.empty();
+                          }
+                          return _commonHeaders.where((String option) {
+                            return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+                          });
+                        },
+                        onSelected: (String selection) {
+                          _headers[index]['key']!.text = selection;
+                          _ensureEmptyHeaderRow();
+                        },
+                        fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                          // Sync existing controller value when built
+                          if (textEditingController.text != _headers[index]['key']!.text) {
+                            textEditingController.text = _headers[index]['key']!.text;
+                          }
+                          textEditingController.addListener(() {
+                            _headers[index]['key']!.text = textEditingController.text;
+                            _ensureEmptyHeaderRow();
+                          });
+                          
+                          return TextField(
+                            controller: textEditingController,
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              hintText: 'Key',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 3,
+                      child: TextField(
+                        controller: _headers[index]['value'],
+                        decoration: const InputDecoration(
+                          hintText: 'Value',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (_) => _ensureEmptyHeaderRow(),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: index == _headers.length - 1 && _headers[index]['key']!.text.isEmpty && _headers[index]['value']!.text.isEmpty 
+                        ? null 
+                        : () {
+                            setState(() {
+                              _headers.removeAt(index);
+                              _ensureEmptyHeaderRow();
+                            });
+                          },
+                    )
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          
+          // Body Section
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Body', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Row(
+                children: [
+                  const Text('RAW'),
+                  Switch(
+                    value: _isJsonMode,
+                    onChanged: (v) => setState(() => _isJsonMode = v),
+                  ),
+                  const Text('JSON'),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _bodyController,
+            maxLines: 10,
+            minLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Request Body',
+              border: OutlineInputBorder(),
+            ),
+            style: const TextStyle(fontFamily: 'monospace'),
+          ),
+          const SizedBox(height: 40), // Padding for scrolling
         ],
       ),
     );
@@ -568,6 +607,32 @@ class RequestDetailPage extends StatelessWidget {
 
   const RequestDetailPage({super.key, required this.record});
 
+  Widget _buildHeadersPreview() {
+    try {
+      final Map<String, dynamic> headersMap = json.decode(record.headers);
+      if (headersMap.isEmpty) {
+        return const Text('(Empty)', style: TextStyle(color: Colors.grey));
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: headersMap.entries.map((e) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${e.key}: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Expanded(child: SelectableText('${e.value}')),
+              ],
+            ),
+          );
+        }).toList(),
+      );
+    } catch (_) {
+      return SelectableText(record.headers);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -575,17 +640,49 @@ class RequestDetailPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          const Text('URL', style: TextStyle(fontWeight: FontWeight.bold)),
-          SelectableText(record.url),
-          const Divider(),
-          const Text('Method', style: TextStyle(fontWeight: FontWeight.bold)),
-          Text(record.method),
-          const Divider(),
-          const Text('Headers', style: TextStyle(fontWeight: FontWeight.bold)),
-          SelectableText(record.headers),
-          const Divider(),
-          const Text('Body', style: TextStyle(fontWeight: FontWeight.bold)),
-          SelectableText(record.body.isEmpty ? '(Empty)' : record.body),
+          const Text('URL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          SelectableText(record.url, style: const TextStyle(fontSize: 16)),
+          const Divider(height: 32),
+          
+          const Text('Method', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+            ),
+            child: Text(record.method, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.blue)),
+          ),
+          const Divider(height: 32),
+          
+          const Text('Headers', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark ? Colors.grey[900] : Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: _buildHeadersPreview(),
+          ),
+          const Divider(height: 32),
+          
+          const Text('Body', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark ? Colors.grey[900] : Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SelectableText(
+              record.body.isEmpty ? '(Empty)' : record.body,
+              style: const TextStyle(fontFamily: 'monospace'),
+            ),
+          ),
         ],
       ),
     );
