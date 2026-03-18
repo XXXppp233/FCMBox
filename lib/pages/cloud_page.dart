@@ -8,10 +8,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:io';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:fcm_box/localization.dart';
+import 'package:fcm_box/l10n/app_localizations.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:fcm_box/cached_network_image.dart';
-import 'package:fcm_box/db/notes_database.dart';
 
 class CloudPage extends StatefulWidget {
   const CloudPage({super.key});
@@ -94,7 +92,7 @@ class _CloudPageState extends State<CloudPage> {
             return AlertDialog(
               backgroundColor: const Color(0xFF202124),
               title: Text(
-                AppLocalizations.of(context)?.translate('backend_status') ??
+                AppLocalizations.of(context)?.backend_status ??
                     'Backend Status',
                 style: const TextStyle(color: Colors.white),
               ),
@@ -277,15 +275,11 @@ class _CloudPageState extends State<CloudPage> {
         // Construct favicon URL
         Uri faviconUri = targetUri.replace(path: '/favicon.ico');
         
-        final faviconResponse = await http.get(faviconUri, headers: headers);
-        if (faviconResponse.statusCode == 200) {
-          await DatabaseHelper.instance.saveImage(faviconUri.toString(), faviconResponse.bodyBytes);
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('cloud_favicon_url', faviconUri.toString());
-          setState(() {
-            _faviconUrl = faviconUri.toString();
-          });
-        }
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('cloud_favicon_url', faviconUri.toString());
+        setState(() {
+          _faviconUrl = faviconUri.toString();
+        });
 
         // Update UI state
         setState(() {
@@ -295,7 +289,6 @@ class _CloudPageState extends State<CloudPage> {
         });
 
         // Save to prefs
-        final prefs = await SharedPreferences.getInstance();
         await prefs.setString('cloud_title', title);
         await prefs.setString('cloud_version', info);
         await prefs.setBool('backend_active', true);
@@ -344,21 +337,21 @@ class _CloudPageState extends State<CloudPage> {
       if (response.statusCode != 200 && response.statusCode != 204) {
         Fluttertoast.showToast(
           msg:
-              '${AppLocalizations.of(context)?.translate('token_registration_failed') ?? 'Token registration failed'}: ${response.statusCode}',
+              '${AppLocalizations.of(context)?.token_registration_failed ?? 'Token registration failed'}: ${response.statusCode}',
         );
       } else {
         Fluttertoast.showToast(
           msg:
               AppLocalizations.of(
                 context,
-              )?.translate('token_registration_success') ??
+              )?.token_registration_success ??
               'Token registration success',
         );
       }
     } catch (e) {
       Fluttertoast.showToast(
         msg:
-            '${AppLocalizations.of(context)?.translate('token_registration_error') ?? 'Token registration error'}: $e',
+            '${AppLocalizations.of(context)?.token_registration_error ?? 'Token registration error'}: $e',
       );
     }
   }
@@ -385,20 +378,22 @@ class _CloudPageState extends State<CloudPage> {
               margin: const EdgeInsets.only(bottom: 16),
               decoration: const BoxDecoration(shape: BoxShape.circle),
               child: ClipOval(
-                child: CachedNetworkImage(
-                  imageUrl: _faviconUrl!,
+                child: Image.network(
+                  _faviconUrl!,
                   width: 96,
                   height: 96,
                   fit: BoxFit.contain,
-                  errorWidget: CircleAvatar(
-                    radius: 48,
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    child: Icon(
-                      Icons.cloud_off,
-                      size: 48,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-                  ),
+                  errorBuilder: (context, error, stackTrace) {
+                    return CircleAvatar(
+                      radius: 48,
+                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                      child: Icon(
+                        Icons.cloud_off,
+                        size: 48,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    );
+                  },
                 ),
               ),
             )
@@ -451,7 +446,7 @@ class _CloudPageState extends State<CloudPage> {
                       ? const Icon(Icons.check)
                       : const Icon(Icons.close)),
             title: Text(
-              AppLocalizations.of(context)?.translate('backend_status') ??
+              AppLocalizations.of(context)?.backend_status ??
                   'Backend Status',
             ),
             subtitle: Text(
@@ -465,7 +460,7 @@ class _CloudPageState extends State<CloudPage> {
           ListTile(
             leading: const Icon(Icons.code),
             title: Text(
-              AppLocalizations.of(context)?.translate('check_code_sample') ??
+              AppLocalizations.of(context)?.check_code_sample ??
                   'View a code sample',
             ),
             onTap: () {
@@ -479,7 +474,7 @@ class _CloudPageState extends State<CloudPage> {
 
           SwitchListTile(
             title: Text(
-              AppLocalizations.of(context)?.translate('delete_old_data') ??
+              AppLocalizations.of(context)?.delete_old_data ??
                   'Delete old data after update',
             ),
             value: _deleteOldData,

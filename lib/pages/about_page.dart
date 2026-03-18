@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:fcm_box/localization.dart';
+import 'package:fcm_box/l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
@@ -42,7 +42,7 @@ class _AboutPageState extends State<AboutPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          AppLocalizations.of(context)?.translate('about') ?? 'About',
+          AppLocalizations.of(context)?.about ?? 'About',
         ),
       ),
       body: ListView(
@@ -59,7 +59,7 @@ class _AboutPageState extends State<AboutPage> {
           const SizedBox(height: 16),
           Center(
             child: Text(
-              AppLocalizations.of(context)?.translate('app_title') ?? 'FCM Box',
+              AppLocalizations.of(context)?.app_title ?? 'FCM Box',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
           ),
@@ -77,9 +77,21 @@ class _AboutPageState extends State<AboutPage> {
           ListTile(
             leading: const Icon(Icons.code),
             title: const Text('GitHub Repository'),
-            subtitle: const Text('https://github.com/XXXppp233/FCMBox'),
+            subtitle: const Text(
+              'https://docs.wepayto.win/application/fcmbox/',
+            ),
             onTap: () {
               _launchUrl('https://github.com/XXXppp233/FCMBox');
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.book),
+            title: const Text('View the Documentation'),
+            subtitle: const Text(
+              'https://docs.wepayto.win/application/fcmbox/',
+            ),
+            onTap: () {
+              _launchUrl('https://docs.wepayto.win/application/fcmbox/');
             },
           ),
           ListTile(

@@ -6,11 +6,10 @@ import 'package:fcm_box/models/note.dart';
 import 'package:fcm_box/pages/settings_page.dart';
 import 'package:fcm_box/pages/about_page.dart';
 import 'package:fcm_box/pages/cloud_page.dart';
-import 'package:fcm_box/pages/fcm_status_page.dart';
 import 'package:fcm_box/pages/json_viewer_page.dart';
-import 'package:fcm_box/pages/search_page.dart';
+import 'package:fcm_box/delegates/note_search_delegate.dart';
 import 'package:fcm_box/theme_settings.dart';
-import 'package:fcm_box/localization.dart';
+import 'package:fcm_box/l10n/app_localizations.dart';
 import 'package:fcm_box/locale_settings.dart';
 import 'package:fcm_box/db/notes_database.dart';
 import 'package:fcm_box/cached_network_image.dart';
@@ -19,12 +18,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:animations/animations.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:android_intent_plus/android_intent.dart';
 
 // ... (other imports)
 
@@ -191,7 +190,7 @@ class MyApp extends StatelessWidget {
                     GlobalWidgetsLocalizations.delegate,
                     GlobalCupertinoLocalizations.delegate,
                   ],
-                  supportedLocales: const [Locale('en', ''), Locale('zh', '')],
+                  supportedLocales: AppLocalizations.supportedLocales,
                   themeMode: settings.themeMode,
                   theme: ThemeData(
                     colorScheme: lightScheme,
@@ -492,7 +491,7 @@ class _MyHomePageState extends State<MyHomePage>
           msg:
               AppLocalizations.of(
                 context,
-              )?.translate('backend_not_configured') ??
+              )?.backend_not_configured ??
               'Backend not configured',
         );
         return;
@@ -588,7 +587,7 @@ class _MyHomePageState extends State<MyHomePage>
           if (!mounted) return;
           Fluttertoast.showToast(
             msg:
-                '${AppLocalizations.of(context)?.translate('updated') ?? 'Updated'} ${newNotes.length} ${AppLocalizations.of(context)?.translate('items') ?? 'items'}',
+                '${AppLocalizations.of(context)?.updated ?? 'Updated'} ${newNotes.length} ${AppLocalizations.of(context)?.items ?? 'items'}',
           );
         }
       } else {
@@ -600,7 +599,7 @@ class _MyHomePageState extends State<MyHomePage>
         if (mounted) {
           Fluttertoast.showToast(
             msg:
-                '${AppLocalizations.of(context)?.translate('refresh_failed') ?? 'Refresh failed'}: $e',
+                '${AppLocalizations.of(context)?.refresh_failed ?? 'Refresh failed'}: $e',
           );
         }
       }
@@ -623,7 +622,7 @@ class _MyHomePageState extends State<MyHomePage>
           builder: (context, setState) {
             return AlertDialog(
               title: Text(
-                AppLocalizations.of(context)?.translate('select_quantity') ??
+                AppLocalizations.of(context)?.select_quantity ??
                     'Select Quantity',
               ),
               content: Row(
@@ -860,7 +859,7 @@ class _MyHomePageState extends State<MyHomePage>
             ListTile(
               leading: const Icon(Icons.cloud),
               title: Text(
-                AppLocalizations.of(context)?.translate('cloud') ?? 'Cloud',
+                AppLocalizations.of(context)?.cloud ?? 'Cloud',
               ),
               onTap: () {
                 Navigator.pop(context);
@@ -875,34 +874,54 @@ class _MyHomePageState extends State<MyHomePage>
               title: Row(
                 children: [
                   Text(
-                    AppLocalizations.of(context)?.translate('fcm_status_title') ??
+                    AppLocalizations.of(
+                          context,
+                        )?.fcm_status_title ??
                         'FCM Status',
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: Colors.green,
-                      shape: BoxShape.circle,
-                    ),
                   ),
                 ],
               ),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const FcmStatusPage(),
-                  ),
-                );
+              trailing: IconButton(
+                icon: const Icon(Icons.open_in_new),
+                tooltip: AppLocalizations.of(context)?.fcm_open_diagnostics ?? 'Open System FCM Diagnostics',
+                onPressed: () {
+                  final String openFailedMsg = AppLocalizations.of(context)?.fcm_open_diagnostics_failed ?? 'Failed to open system diagnostics';
+                  try {
+                    if (Platform.isAndroid) {
+                      const AndroidIntent intent = AndroidIntent(
+                        action: 'android.intent.action.MAIN',
+                        package: 'com.google.android.gms',
+                        componentName: 'com.google.android.gms.gcm.GcmDiagnostics',
+                      );
+                      intent.launch().catchError((e) {
+                        Fluttertoast.showToast(msg: openFailedMsg);
+                      });
+                    }
+                  } catch (_) {}
+                },
+              ),
+              onLongPress: () async {
+                final String copiedMsg = AppLocalizations.of(context)?.copied_to_clipboard ?? 'Copied to clipboard';
+                final String failedMsg = AppLocalizations.of(context)?.fcm_token_failed ?? 'Failed to get token';
+                final String errorMsg = AppLocalizations.of(context)?.fcm_error_prefix ?? 'Error';
+
+                try {
+                  String? token = await FirebaseMessaging.instance.getToken();
+                  if (token != null && token.isNotEmpty) {
+                    Clipboard.setData(ClipboardData(text: token));
+                    Fluttertoast.showToast(msg: copiedMsg);
+                  } else {
+                    Fluttertoast.showToast(msg: failedMsg);
+                  }
+                } catch (e) {
+                  Fluttertoast.showToast(msg: '$errorMsg: $e');
+                }
               },
             ),
             ListTile(
               leading: const Icon(Icons.settings),
               title: Text(
-                AppLocalizations.of(context)?.translate('settings') ??
+                AppLocalizations.of(context)?.settings ??
                     'Settings',
               ),
               onTap: () {
@@ -918,7 +937,7 @@ class _MyHomePageState extends State<MyHomePage>
             ListTile(
               leading: const Icon(Icons.info),
               title: Text(
-                AppLocalizations.of(context)?.translate('about') ?? 'About',
+                AppLocalizations.of(context)?.about ?? 'About',
               ),
               onTap: () {
                 Navigator.pop(context);
@@ -932,7 +951,7 @@ class _MyHomePageState extends State<MyHomePage>
             ListTile(
               leading: const Icon(Icons.inbox),
               title: Text(
-                AppLocalizations.of(context)?.translate('all') ?? 'All',
+                AppLocalizations.of(context)?.all ?? 'All',
               ),
               selected: _selectedService == null,
               onTap: () {
@@ -982,53 +1001,47 @@ class _MyHomePageState extends State<MyHomePage>
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: OpenContainer(
-                      transitionType: ContainerTransitionType.fade,
-                      openBuilder: (context, _) => const SearchPage(),
-                      closedBuilder: (context, openContainer) => InkWell(
-                        onTap: () async {
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const SearchPage(),
+                    child: InkWell(
+                      onTap: () async {
+                        final result = await showSearch<Map<String, dynamic>?>(
+                          context: context,
+                          delegate: NoteSearchDelegate(
+                            allNotes: _notes,
+                            searchFieldLabel: AppLocalizations.of(context)?.search_hint ?? 'Search',
+                          ),
+                        );
+                        if (result != null &&
+                            result['type'] == 'service') {
+                          setState(() {
+                            _selectedService = result['value'];
+                            _applyFilters();
+                          });
+                        }
+                      },
+                      child: Container(
+                        height: 48,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color:
+                              Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[900]
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.search, color: Colors.grey),
+                            const SizedBox(width: 8),
+                            Text(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.search_hint ??
+                                  "Search",
+                              style: const TextStyle(color: Colors.grey),
                             ),
-                          );
-                          if (result != null &&
-                              result is Map &&
-                              result['type'] == 'service') {
-                            setState(() {
-                              _selectedService = result['value'];
-                              _applyFilters();
-                            });
-                          }
-                        },
-                        child: Container(
-                          height: 48,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color:
-                                Theme.of(context).brightness == Brightness.dark
-                                ? Colors.grey[900]
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.search, color: Colors.grey),
-                              const SizedBox(width: 8),
-                              Text(
-                                AppLocalizations.of(
-                                      context,
-                                    )?.translate('search_hint') ??
-                                    "Search",
-                                style: const TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
+                          ],
                         ),
                       ),
-                      closedColor: Colors.transparent,
-                      closedElevation: 0,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -1086,7 +1099,7 @@ class _MyHomePageState extends State<MyHomePage>
                   else
                     ActionChip(
                       label: Text(
-                        AppLocalizations.of(context)?.translate('all') ?? 'All',
+                        AppLocalizations.of(context)?.all ?? 'All',
                       ),
                       avatar: const Icon(Icons.filter_list, size: 18),
                       onPressed: () {
