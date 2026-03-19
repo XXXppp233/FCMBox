@@ -284,7 +284,7 @@ class _RequestPageState extends State<RequestPage> {
       floatingActionButton: ExpandableFab(
         key: _key,
         type: ExpandableFabType.up,
-        distance: 50,
+        distance: 60,
         childrenAnimation: ExpandableFabAnimation.none,
         openButtonBuilder: RotateFloatingActionButtonBuilder(
           child: const Icon(Icons.add),
