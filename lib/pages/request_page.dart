@@ -216,6 +216,7 @@ class _RequestPageState extends State<RequestPage> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
                           onTap: () {
+                            HapticFeedback.lightImpact();
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -307,6 +308,7 @@ class _RequestPageState extends State<RequestPage> {
               FloatingActionButton.extended(
                 enableFeedback: true,
                 heroTag: null,
+                shape: const StadiumBorder(),
                 onPressed: () {
                   final state = _key.currentState;
                   if (state != null) {
@@ -324,6 +326,7 @@ class _RequestPageState extends State<RequestPage> {
               FloatingActionButton.extended(
                 enableFeedback: true,
                 heroTag: null,
+                shape: const StadiumBorder(),
                 onPressed: () {
                   final state = _key.currentState;
                   if (state != null) {
@@ -341,6 +344,7 @@ class _RequestPageState extends State<RequestPage> {
               FloatingActionButton.extended(
                 enableFeedback: true,
                 heroTag: null,
+                shape: const StadiumBorder(),
                 onPressed: () {
                   final state = _key.currentState;
                   if (state != null) {
@@ -666,8 +670,6 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
             ),
           ),
 
-          const Divider(height: 32),
-
           // Headers Section
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -784,8 +786,6 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
               );
             },
           ),
-
-          const Divider(height: 32),
 
           // Body Section
           Padding(
@@ -1061,8 +1061,6 @@ class RequestDetailPage extends StatelessWidget {
           ),
           _buildUrlTable(context),
 
-          const Divider(height: 32),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Text(
@@ -1074,8 +1072,6 @@ class RequestDetailPage extends StatelessWidget {
             ),
           ),
           _buildHeadersTable(context),
-
-          const Divider(height: 32),
 
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
