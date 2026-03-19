@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html_parser;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:io';
-import 'package:android_intent_plus/android_intent.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:fcm_box/l10n/app_localizations.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -28,7 +28,7 @@ class _CloudPageState extends State<CloudPage> {
   String _backendInfo = 'The backend info';
   bool _isConnected = false;
   bool _isLoading = false;
-  String? _faviconUrl;
+  int? _backendStatusCode;
   bool _deleteOldData = false;
 
   @override
@@ -48,14 +48,7 @@ class _CloudPageState extends State<CloudPage> {
       _backendInfo = prefs.getString('cloud_version') ?? 'The backend info';
       _isConnected = prefs.getBool('backend_active') ?? false;
       _deleteOldData = prefs.getBool('delete_old_data') ?? false;
-    });
-    _loadFavicon();
-  }
-
-  Future<void> _loadFavicon() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _faviconUrl = prefs.getString('cloud_favicon_url');
+      _backendStatusCode = prefs.getInt('backend_status_code');
     });
   }
 
@@ -69,7 +62,11 @@ class _CloudPageState extends State<CloudPage> {
   }
 
   void _showConfigSheet() async {
-    final urlController = TextEditingController(text: _backendUrl);
+    String tempBackendUrl = _backendUrl;
+    if (tempBackendUrl != 'https://fcmbackend.wepayto.win' &&
+        tempBackendUrl != 'https://fcmbox.firebase.wepayto.win/api') {
+      tempBackendUrl = 'https://fcmbackend.wepayto.win';
+    }
     final authController = TextEditingController(text: _authKey);
     final ipController = TextEditingController(text: _ipAddress);
     bool tempHttps = _useHttps;
@@ -90,15 +87,9 @@ class _CloudPageState extends State<CloudPage> {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF202124),
               title: Text(
                 AppLocalizations.of(context)?.backend_status ??
                     'Backend Status',
-                style: const TextStyle(color: Colors.white),
-              ),
-              contentPadding: const EdgeInsets.all(24),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
               ),
               content: SizedBox(
                 width: double.maxFinite,
@@ -107,61 +98,71 @@ class _CloudPageState extends State<CloudPage> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      TextField(
-                        controller: urlController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: 'Backend URL',
-                          labelStyle: TextStyle(color: Colors.grey[400]),
-                          enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey[600]!),
-                          ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<String>(
+                          segments: [
+                            ButtonSegment<String>(
+                              value: 'https://fcmbackend.wepayto.win',
+                              label: const Text('Cloudflare'),
+                              icon: Image.asset(
+                                'assets/icon/Cloudflare.png',
+                                width: 24,
+                                height: 24,
+                              ),
+                            ),
+                            ButtonSegment<String>(
+                              value: 'https://fcmbox.firebase.wepayto.win/api',
+                              label: const Text('Firebase'),
+                              icon: Image.asset(
+                                'assets/icon/Firebase.png',
+                                width: 24,
+                                height: 24,
+                              ),
+                            ),
+                          ],
+                          selected: {tempBackendUrl},
+                          onSelectionChanged: (Set<String> newSelection) {
+                            setSheetState(() {
+                              tempBackendUrl = newSelection.first;
+                            });
+                          },
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 16),
                       TextField(
                         controller: authController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: 'Authorization',
-                          labelStyle: TextStyle(color: Colors.grey[400]),
-                          enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey[600]!),
-                          ),
+                          border: OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 8),
                       ExpansionTile(
-                        title: const Text(
-                          'Advanced options',
-                          style: TextStyle(color: Colors.white),
+                        title: const Text('Advanced options'),
+                        shape: const Border(),
+                        collapsedShape: const Border(),
+                        childrenPadding: const EdgeInsets.only(
+                          top: 8,
+                          bottom: 8,
                         ),
-                        iconColor: Colors.white,
-                        collapsedIconColor: Colors.grey[400],
                         children: [
                           TextField(
                             controller: ipController,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: InputDecoration(
+                            decoration: const InputDecoration(
                               labelText: 'IP Address (Optional)',
-                              labelStyle: TextStyle(color: Colors.grey[400]),
-                              enabledBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Colors.grey[600]!,
-                                ),
-                              ),
+                              border: OutlineInputBorder(),
                             ),
                           ),
+                          const SizedBox(height: 8),
                           SwitchListTile(
-                            title: const Text(
-                              'Use HTTPS',
-                              style: TextStyle(color: Colors.white),
-                            ),
+                            title: const Text('Use HTTPS'),
                             value: tempHttps,
-                            activeThumbColor: Colors.blue[200],
                             onChanged: (val) {
+                              HapticFeedback.lightImpact();
                               setSheetState(() => tempHttps = val);
                             },
+                            contentPadding: EdgeInsets.zero,
                           ),
                         ],
                       ),
@@ -170,28 +171,8 @@ class _CloudPageState extends State<CloudPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Device: $deviceName',
-                            style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 12,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.arrow_forward_ios,
-                              size: 14,
-                              color: Colors.white,
-                            ),
-                            onPressed: () {
-                              try {
-                                if (Platform.isAndroid) {
-                                  const AndroidIntent intent = AndroidIntent(
-                                    action: 'android.settings.SETTINGS',
-                                  );
-                                  intent.launch();
-                                }
-                              } catch (_) {}
-                            },
+                            deviceName,
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
                       ),
@@ -202,18 +183,12 @@ class _CloudPageState extends State<CloudPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.grey[400],
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
                   child: const Text('Cancel'),
                 ),
-                ElevatedButton(
+                FilledButton(
                   onPressed: () {
                     setState(() {
-                      _backendUrl = urlController.text;
+                      _backendUrl = tempBackendUrl;
                       _authKey = authController.text;
                       _ipAddress = ipController.text;
                       _useHttps = tempHttps;
@@ -222,13 +197,6 @@ class _CloudPageState extends State<CloudPage> {
                     Navigator.pop(context);
                     _checkBackend();
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFA8C7FA),
-                    foregroundColor: const Color(0xFF062E6F),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
                   child: const Text('Save'),
                 ),
               ],
@@ -264,22 +232,17 @@ class _CloudPageState extends State<CloudPage> {
     try {
       // 1. GET Root
       final response = await http.get(targetUri, headers: headers);
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _backendStatusCode = response.statusCode;
+      });
+      await prefs.setInt('backend_status_code', response.statusCode);
       if (response.statusCode == 200) {
         final document = html_parser.parse(response.body);
         String title =
             document.head?.querySelector('title')?.text ?? 'The Backend Title';
         String info =
             document.body?.querySelector('h1')?.text ?? 'The backend info';
-
-        // 2. GET Favicon
-        // Construct favicon URL
-        Uri faviconUri = targetUri.replace(path: '/favicon.ico');
-        
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('cloud_favicon_url', faviconUri.toString());
-        setState(() {
-          _faviconUrl = faviconUri.toString();
-        });
 
         // Update UI state
         setState(() {
@@ -342,9 +305,7 @@ class _CloudPageState extends State<CloudPage> {
       } else {
         Fluttertoast.showToast(
           msg:
-              AppLocalizations.of(
-                context,
-              )?.token_registration_success ??
+              AppLocalizations.of(context)?.token_registration_success ??
               'Token registration success',
         );
       }
@@ -371,51 +332,24 @@ class _CloudPageState extends State<CloudPage> {
         children: [
           const SizedBox(height: 40),
           // Dynamic Icon (Favicon or default)
-          if (_faviconUrl != null && _faviconUrl!.isNotEmpty)
-            Container(
-              height: 96,
-              width: 96,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: const BoxDecoration(shape: BoxShape.circle),
-              child: ClipOval(
-                child: Image.network(
-                  _faviconUrl!,
-                  width: 96,
-                  height: 96,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return CircleAvatar(
-                      radius: 48,
-                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                      child: Icon(
-                        Icons.cloud_off,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: CircleAvatar(
-                radius: 48,
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                child: _isConnected
-                    ? Icon(
-                        Icons.cloud_done,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ) // Example for connected
-                    : Icon(
-                        Icons.cloud_off,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ), // No network icon
-              ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: CircleAvatar(
+              radius: 48,
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              child: _isConnected
+                  ? Icon(
+                      Icons.cloud_done,
+                      size: 48,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ) // Example for connected
+                  : Icon(
+                      Icons.cloud_off,
+                      size: 48,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ), // No network icon
             ),
+          ),
 
           const SizedBox(height: 16),
           Center(
@@ -446,14 +380,13 @@ class _CloudPageState extends State<CloudPage> {
                       ? const Icon(Icons.check)
                       : const Icon(Icons.close)),
             title: Text(
-              AppLocalizations.of(context)?.backend_status ??
-                  'Backend Status',
+              AppLocalizations.of(context)?.backend_status ?? 'Backend Status',
             ),
             subtitle: Text(
-              _isConnected ? _backendUrl : 'None',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+                _backendStatusCode != null ? 'HTTP $_backendStatusCode' : 'None',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             onTap: _showConfigSheet,
           ),
 
@@ -479,6 +412,7 @@ class _CloudPageState extends State<CloudPage> {
             ),
             value: _deleteOldData,
             onChanged: (val) async {
+              HapticFeedback.heavyImpact();
               setState(() => _deleteOldData = val);
               final prefs = await SharedPreferences.getInstance();
               await prefs.setBool('delete_old_data', val);

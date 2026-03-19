@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -448,6 +449,7 @@ class _MyHomePageState extends State<MyHomePage>
   }
 
   void _applyFilters() {
+    HapticFeedback.lightImpact();
     setState(() {
       _filteredNotes = _notes.where((note) {
         if (_selectedService != null && note.service != _selectedService) {
@@ -472,7 +474,7 @@ class _MyHomePageState extends State<MyHomePage>
 
   Future<void> _refreshFromBackend({int? quantity, bool? deleteOld}) async {
     if (_isLoading) return;
-
+    HapticFeedback.mediumImpact();
     setState(() => _isLoading = true);
     _refreshController.repeat();
 
@@ -490,9 +492,7 @@ class _MyHomePageState extends State<MyHomePage>
         if (!mounted) return;
         Fluttertoast.showToast(
           msg:
-              AppLocalizations.of(
-                context,
-              )?.backend_not_configured ??
+              AppLocalizations.of(context)?.backend_not_configured ??
               'Backend not configured',
         );
         return;
@@ -836,11 +836,7 @@ class _MyHomePageState extends State<MyHomePage>
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        Icons.rss_feed,
-                        size: 32,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
+                      Icon(Icons.local_fire_department_outlined),
                       const SizedBox(width: 16),
                       Text(
                         'FCM Box',
@@ -859,9 +855,7 @@ class _MyHomePageState extends State<MyHomePage>
             ),
             ListTile(
               leading: const Icon(Icons.cloud),
-              title: Text(
-                AppLocalizations.of(context)?.cloud ?? 'Cloud',
-              ),
+              title: Text(AppLocalizations.of(context)?.cloud ?? 'Cloud'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -875,24 +869,29 @@ class _MyHomePageState extends State<MyHomePage>
               title: Row(
                 children: [
                   Text(
-                    AppLocalizations.of(
-                          context,
-                        )?.fcm_status_title ??
+                    AppLocalizations.of(context)?.fcm_status_title ??
                         'FCM Status',
                   ),
                 ],
               ),
               trailing: IconButton(
                 icon: const Icon(Icons.open_in_new),
-                tooltip: AppLocalizations.of(context)?.fcm_open_diagnostics ?? 'Open System FCM Diagnostics',
+                tooltip:
+                    AppLocalizations.of(context)?.fcm_open_diagnostics ??
+                    'Open System FCM Diagnostics',
                 onPressed: () {
-                  final String openFailedMsg = AppLocalizations.of(context)?.fcm_open_diagnostics_failed ?? 'Failed to open system diagnostics';
+                  final String openFailedMsg =
+                      AppLocalizations.of(
+                        context,
+                      )?.fcm_open_diagnostics_failed ??
+                      'Failed to open system diagnostics';
                   try {
                     if (Platform.isAndroid) {
                       const AndroidIntent intent = AndroidIntent(
                         action: 'android.intent.action.MAIN',
                         package: 'com.google.android.gms',
-                        componentName: 'com.google.android.gms.gcm.GcmDiagnostics',
+                        componentName:
+                            'com.google.android.gms.gcm.GcmDiagnostics',
                       );
                       intent.launch().catchError((e) {
                         Fluttertoast.showToast(msg: openFailedMsg);
@@ -902,9 +901,14 @@ class _MyHomePageState extends State<MyHomePage>
                 },
               ),
               onLongPress: () async {
-                final String copiedMsg = AppLocalizations.of(context)?.copied_to_clipboard ?? 'Copied to clipboard';
-                final String failedMsg = AppLocalizations.of(context)?.fcm_token_failed ?? 'Failed to get token';
-                final String errorMsg = AppLocalizations.of(context)?.fcm_error_prefix ?? 'Error';
+                final String copiedMsg =
+                    AppLocalizations.of(context)?.copied_to_clipboard ??
+                    'Copied to clipboard';
+                final String failedMsg =
+                    AppLocalizations.of(context)?.fcm_token_failed ??
+                    'Failed to get token';
+                final String errorMsg =
+                    AppLocalizations.of(context)?.fcm_error_prefix ?? 'Error';
 
                 try {
                   String? token = await FirebaseMessaging.instance.getToken();
@@ -934,10 +938,7 @@ class _MyHomePageState extends State<MyHomePage>
             ),
             ListTile(
               leading: const Icon(Icons.settings),
-              title: Text(
-                AppLocalizations.of(context)?.settings ??
-                    'Settings',
-              ),
+              title: Text(AppLocalizations.of(context)?.settings ?? 'Settings'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -950,9 +951,7 @@ class _MyHomePageState extends State<MyHomePage>
             ),
             ListTile(
               leading: const Icon(Icons.info),
-              title: Text(
-                AppLocalizations.of(context)?.about ?? 'About',
-              ),
+              title: Text(AppLocalizations.of(context)?.about ?? 'About'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -964,9 +963,7 @@ class _MyHomePageState extends State<MyHomePage>
             const Divider(),
             ListTile(
               leading: const Icon(Icons.inbox),
-              title: Text(
-                AppLocalizations.of(context)?.all ?? 'All',
-              ),
+              title: Text(AppLocalizations.of(context)?.all ?? 'All'),
               selected: _selectedService == null,
               onTap: () {
                 setState(() {
@@ -1021,11 +1018,12 @@ class _MyHomePageState extends State<MyHomePage>
                           context: context,
                           delegate: NoteSearchDelegate(
                             allNotes: _notes,
-                            searchFieldLabel: AppLocalizations.of(context)?.search_hint ?? 'Search',
+                            searchFieldLabel:
+                                AppLocalizations.of(context)?.search_hint ??
+                                'Search',
                           ),
                         );
-                        if (result != null &&
-                            result['type'] == 'service') {
+                        if (result != null && result['type'] == 'service') {
                           setState(() {
                             _selectedService = result['value'];
                             _applyFilters();
@@ -1036,8 +1034,7 @@ class _MyHomePageState extends State<MyHomePage>
                         height: 48,
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color:
-                              Theme.of(context).brightness == Brightness.dark
+                          color: Theme.of(context).brightness == Brightness.dark
                               ? Colors.grey[900]
                               : Colors.white,
                           borderRadius: BorderRadius.circular(24),
@@ -1047,9 +1044,7 @@ class _MyHomePageState extends State<MyHomePage>
                             const Icon(Icons.search, color: Colors.grey),
                             const SizedBox(width: 8),
                             Text(
-                              AppLocalizations.of(
-                                    context,
-                                  )?.search_hint ??
+                              AppLocalizations.of(context)?.search_hint ??
                                   "Search",
                               style: const TextStyle(color: Colors.grey),
                             ),
@@ -1061,6 +1056,7 @@ class _MyHomePageState extends State<MyHomePage>
                   const SizedBox(width: 16),
                   InkWell(
                     onTap: () {
+                      HapticFeedback.lightImpact();
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -1112,9 +1108,7 @@ class _MyHomePageState extends State<MyHomePage>
                     )
                   else
                     ActionChip(
-                      label: Text(
-                        AppLocalizations.of(context)?.all ?? 'All',
-                      ),
+                      label: Text(AppLocalizations.of(context)?.all ?? 'All'),
                       avatar: const Icon(Icons.filter_list, size: 18),
                       onPressed: () {
                         _scaffoldKey.currentState?.openDrawer();

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fcm_box/theme_settings.dart';
 import 'package:fcm_box/l10n/app_localizations.dart';
@@ -90,6 +91,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('language_code', code);
     setState(() {
+      HapticFeedback.heavyImpact();
       _languageCode = code;
     });
     localeSettingsNotifier.value = LocaleSettings(Locale(code));
@@ -149,6 +151,7 @@ class _SettingsPageState extends State<SettingsPage> {
               final color = _colors[index];
               return InkWell(
                 onTap: () {
+                  HapticFeedback.lightImpact();
                   _saveThemeColor(color.toARGB32());
                   Navigator.pop(context);
                 },
@@ -170,9 +173,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          AppLocalizations.of(context)?.settings ?? 'Settings',
-        ),
+        title: Text(AppLocalizations.of(context)?.settings ?? 'Settings'),
       ),
       body: ListView(
         children: [
@@ -187,15 +188,10 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           ListTile(
-            title: Text(
-              AppLocalizations.of(context)?.dark_mode ??
-                  'Dark Mode',
-            ),
+            title: Text(AppLocalizations.of(context)?.dark_mode ?? 'Dark Mode'),
             subtitle: Text(
               _themeMode == 'system'
-                  ? (AppLocalizations.of(
-                          context,
-                        )?.system_default ??
+                  ? (AppLocalizations.of(context)?.system_default ??
                         'System Default')
                   : _themeMode == 'dark'
                   ? (AppLocalizations.of(context)?.on ?? 'On')
@@ -207,8 +203,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 builder: (BuildContext context) {
                   return SimpleDialog(
                     title: Text(
-                      AppLocalizations.of(context)?.dark_mode ??
-                          'Dark Mode',
+                      AppLocalizations.of(context)?.dark_mode ?? 'Dark Mode',
                     ),
                     children: [
                       SimpleDialogOption(
@@ -217,9 +212,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           _saveThemeMode('system');
                         },
                         child: Text(
-                          AppLocalizations.of(
-                                context,
-                              )?.system_default ??
+                          AppLocalizations.of(context)?.system_default ??
                               'System Default',
                         ),
                       ),
@@ -228,19 +221,14 @@ class _SettingsPageState extends State<SettingsPage> {
                           Navigator.pop(context);
                           _saveThemeMode('dark');
                         },
-                        child: Text(
-                          AppLocalizations.of(context)?.on ?? 'On',
-                        ),
+                        child: Text(AppLocalizations.of(context)?.on ?? 'On'),
                       ),
                       SimpleDialogOption(
                         onPressed: () {
                           Navigator.pop(context);
                           _saveThemeMode('light');
                         },
-                        child: Text(
-                          AppLocalizations.of(context)?.off ??
-                              'Off',
-                        ),
+                        child: Text(AppLocalizations.of(context)?.off ?? 'Off'),
                       ),
                     ],
                   );
@@ -250,40 +238,35 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           SwitchListTile(
             title: Text(
-              AppLocalizations.of(context)?.pure_dark_mode ??
-                  'Pure Dark Mode',
+              AppLocalizations.of(context)?.pure_dark_mode ?? 'Pure Dark Mode',
             ),
             subtitle: Text(
-              AppLocalizations.of(
-                    context,
-                  )?.pure_dark_mode_subtitle ??
+              AppLocalizations.of(context)?.pure_dark_mode_subtitle ??
                   'Use pure black background in dark mode',
             ),
             value: _usePureDark,
             onChanged: (bool value) {
+              HapticFeedback.lightImpact();
               _saveUsePureDark(value);
             },
           ),
           SwitchListTile(
             title: Text(
-              AppLocalizations.of(context)?.use_monet ??
-                  'Use Android Monet',
+              AppLocalizations.of(context)?.use_monet ?? 'Use Android Monet',
             ),
             subtitle: Text(
-              AppLocalizations.of(
-                    context,
-                  )?.use_android_monet_subtitle ??
+              AppLocalizations.of(context)?.use_android_monet_subtitle ??
                   'Use dynamic colors from your wallpaper',
             ),
             value: _useMonet,
             onChanged: (bool value) {
+              HapticFeedback.lightImpact();
               _saveUseMonet(value);
             },
           ),
           ListTile(
             title: Text(
-              AppLocalizations.of(context)?.theme_colors ??
-                  'Theme Colors',
+              AppLocalizations.of(context)?.theme_colors ?? 'Theme Colors',
             ),
             subtitle: _useMonet
                 ? Text(
@@ -303,6 +286,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: _useMonet
                 ? null
                 : () {
+                    HapticFeedback.lightImpact();
                     _showColorPicker(context);
                   },
           ),
@@ -319,21 +303,31 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           ListTile(
             leading: const Icon(Icons.language),
-            title: Text(
-              AppLocalizations.of(context)?.language ?? 'Language',
-            ),
-            trailing: DropdownButton<String>(
-              value: _languageCode,
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  _saveLanguage(newValue);
-                }
-              },
-              items: [
-                DropdownMenuItem(value: 'en', child: Text('English')),
-                DropdownMenuItem(value: 'zh', child: Text('简体中文')),
+            title: Text(AppLocalizations.of(context)?.language ?? 'Language'),
+            trailing: SegmentedButton(
+              segments: const [
+                ButtonSegment(value: 'en', label: Text('English')),
+                ButtonSegment(value: 'zh', label: Text('简体中文')),
               ],
+              selected: {_languageCode}, // 响应式绑定当前语言代码
+              onSelectionChanged: (Set<String> newSelection) {
+                // 从 Set 中取出新选中的值并保存
+                _saveLanguage(newSelection.first);
+              },
             ),
+
+            // trailing: DropdownButton<String>(
+            //   value: _languageCode,
+            //   onChanged: (String? newValue) {
+            //     if (newValue != null) {
+            //       _saveLanguage(newValue);
+            //     }
+            //   },
+            //   items: [
+            //     DropdownMenuItem(value: 'en', child: Text('English')),
+            //     DropdownMenuItem(value: 'zh', child: Text('简体中文')),
+            //   ],
+            // ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -348,15 +342,11 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             leading: const Icon(Icons.notifications),
             title: Text(
-              AppLocalizations.of(
-                    context,
-                  )?.notification_permission ??
+              AppLocalizations.of(context)?.notification_permission ??
                   'Notification Permission',
             ),
             subtitle: Text(
-              AppLocalizations.of(
-                    context,
-                  )?.notification_permission_subtitle ??
+              AppLocalizations.of(context)?.notification_permission_subtitle ??
                   'Allow app to post notifications',
             ),
             onTap: () async {
@@ -369,9 +359,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 if (context.mounted) {
                   Fluttertoast.showToast(
                     msg:
-                        AppLocalizations.of(
-                          context,
-                        )?.permission_granted ??
+                        AppLocalizations.of(context)?.permission_granted ??
                         'Permission already granted',
                   );
                 }

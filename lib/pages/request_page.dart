@@ -7,6 +7,7 @@ import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
+import 'package:flutter/services.dart';
 import '../models/request_record.dart';
 import '../db/notes_database.dart';
 import '../l10n/app_localizations.dart';
@@ -107,6 +108,7 @@ class _RequestPageState extends State<RequestPage> {
                   avatar: const Icon(Icons.public, size: 18),
                   selected: _domainFilter.isNotEmpty,
                   onSelected: (_) {
+                    HapticFeedback.lightImpact();
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
@@ -146,6 +148,7 @@ class _RequestPageState extends State<RequestPage> {
                   avatar: const Icon(Icons.http, size: 18),
                   selected: _methodFilter.isNotEmpty,
                   onSelected: (_) {
+                    HapticFeedback.lightImpact();
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
@@ -273,7 +276,8 @@ class _RequestPageState extends State<RequestPage> {
       floatingActionButton: ExpandableFab(
         key: _key,
         type: ExpandableFabType.up,
-        distance: 70,
+        distance: 10,
+        childrenAnimation: ExpandableFabAnimation.none,
         openButtonBuilder: RotateFloatingActionButtonBuilder(
           child: const Icon(Icons.add),
           fabSize: ExpandableFabSize.regular,
@@ -289,26 +293,8 @@ class _RequestPageState extends State<RequestPage> {
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Text('Blank Template', style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface)),
-              ),
-              const SizedBox(width: 16),
-              FloatingActionButton.small(
-                heroTag: null,
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-                foregroundColor: Theme.of(context).colorScheme.onSurface,
+              FloatingActionButton.extended(
+                enableFeedback: true,
                 onPressed: () {
                   final state = _key.currentState;
                   if (state != null) {
@@ -316,32 +302,15 @@ class _RequestPageState extends State<RequestPage> {
                   }
                   _openComposer();
                 },
-                child: const Icon(Icons.insert_drive_file_outlined),
+                icon: const Icon(Icons.insert_drive_file_outlined),
+                label: const Text('Blank Request'),
               ),
             ],
           ),
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Text('FCM Template', style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface)),
-              ),
-              const SizedBox(width: 16),
-              FloatingActionButton.small(
-                heroTag: null,
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-                foregroundColor: Theme.of(context).colorScheme.onSurface,
+              FloatingActionButton.extended(
+                enableFeedback: true,
                 onPressed: () {
                   final state = _key.currentState;
                   if (state != null) {
@@ -349,7 +318,8 @@ class _RequestPageState extends State<RequestPage> {
                   }
                   _openComposer(useFcmTemplate: true);
                 },
-                child: const Icon(Icons.cloud_upload_outlined),
+                icon: const Icon(Icons.cloud_upload_outlined),
+                label: const Text('FCM Template'),
               ),
             ],
           ),
@@ -522,6 +492,7 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
   }
 
   Future<void> _sendRequest() async {
+    HapticFeedback.vibrate();
     setState(() => _isSending = true);
     try {
       final urlStr = _urlController.text.trim();
@@ -771,6 +742,7 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
                               _headers[index]['value']!.text.isEmpty
                           ? null
                           : () {
+                              HapticFeedback.lightImpact();
                               setState(() {
                                 _headers.removeAt(index);
                                 _ensureEmptyHeaderRow();
@@ -800,12 +772,14 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
                 ),
                 SegmentedButton<bool>(
                   segments: const [
-                    ButtonSegment(value: false, label: Text('RAW')),
-                    ButtonSegment(value: true, label: Text('JSON')),
+                    ButtonSegment(value: false, icon: Icon(Icons.raw_on)),
+                    ButtonSegment(value: true, icon: Icon(Icons.data_object)),
                   ],
                   selected: {_isJsonMode},
-                  onSelectionChanged: (set) =>
-                      setState(() => _isJsonMode = set.first),
+                  onSelectionChanged: (set) => {
+                    HapticFeedback.lightImpact(),
+                    setState(() => _isJsonMode = set.first),
+                  },
                   showSelectedIcon: false,
                   style: SegmentedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -947,7 +921,10 @@ class RequestDetailPage extends StatelessWidget {
                     padding: const EdgeInsets.all(12.0),
                     child: SelectableText(
                       e.key,
-                      style: const TextStyle(fontWeight: FontWeight.bold, overflow: TextOverflow.ellipsis),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       maxLines: 1,
                     ),
                   ),
@@ -996,28 +973,25 @@ class RequestDetailPage extends StatelessWidget {
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: HighlightView(
-                    prettyJson,
-                    language: 'json',
-                    theme: Theme.of(context).brightness == Brightness.dark
-                        ? atomOneDarkTheme
-                        : atomOneLightTheme,
-                    padding: const EdgeInsets.all(16.0),
-                    textStyle: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 14,
-                    ),
-                  ),
-            )
-            : Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: SelectableText(
-                  record.body,
-                  style: const TextStyle(
+                  prettyJson,
+                  language: 'json',
+                  theme: Theme.of(context).brightness == Brightness.dark
+                      ? atomOneDarkTheme
+                      : atomOneLightTheme,
+                  padding: const EdgeInsets.all(16.0),
+                  textStyle: const TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 14,
                   ),
                 ),
-            ),
+              )
+            : Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: SelectableText(
+                  record.body,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
+                ),
+              ),
       ),
     );
   }
@@ -1056,7 +1030,7 @@ class RequestDetailPage extends StatelessWidget {
             ),
           ),
           _buildUrlTable(context),
-          
+
           const Divider(height: 32),
 
           Padding(
@@ -1070,7 +1044,7 @@ class RequestDetailPage extends StatelessWidget {
             ),
           ),
           _buildHeadersTable(context),
-          
+
           const Divider(height: 32),
 
           Padding(
