@@ -214,7 +214,9 @@ class _MyHomePageState extends State<MyHomePage>
   int? _timeFilterStart;
   int? _timeFilterEnd;
 
-  String? _faviconUrl;
+  static const String _cloudflareBackendHost = 'fcmbackend.wepayto.win';
+  static const String _firebaseBackendHost = 'fcmbox.firebase.wepayto.win/api';
+  String? _backendIconAsset;
   bool _isLoading = false;
   final Set<String> _newlyAddedIds = {};
 
@@ -242,21 +244,40 @@ class _MyHomePageState extends State<MyHomePage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _loadNotes();
-      _loadFavicon();
+      _loadBackendIcon();
     }
   }
 
   Future<void> _initApp() async {
     await Permission.notification.request();
     await _loadNotes();
-    await _loadFavicon();
+    await _loadBackendIcon();
     _setupFCM();
   }
 
-  Future<void> _loadFavicon() async {
+  String _normalizeBackendUrl(String url) {
+    var normalized = url.trim();
+    normalized = normalized.replaceAll(RegExp(r'^https?://'), '');
+    normalized = normalized.replaceAll(RegExp(r'/+$'), '');
+    return normalized;
+  }
+
+  String? _iconForBackendUrl(String? url) {
+    if (url == null || url.isEmpty) return null;
+    final normalized = _normalizeBackendUrl(url);
+    if (normalized == _cloudflareBackendHost) {
+      return 'assets/icon/Cloudflare.png';
+    }
+    if (normalized == _firebaseBackendHost) {
+      return 'assets/icon/Firebase.png';
+    }
+    return null;
+  }
+
+  Future<void> _loadBackendIcon() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _faviconUrl = prefs.getString('cloud_favicon_url');
+      _backendIconAsset = _iconForBackendUrl(prefs.getString('backend_url'));
     });
   }
 
@@ -988,21 +1009,20 @@ class _MyHomePageState extends State<MyHomePage>
                         MaterialPageRoute(
                           builder: (context) => const CloudPage(),
                         ),
-                      ).then((_) => _loadFavicon());
+                      ).then((_) => _loadBackendIcon());
                     },
                     borderRadius: BorderRadius.circular(20),
                     child: Container(
                       width: 40,
                       height: 40,
                       decoration: const BoxDecoration(shape: BoxShape.circle),
-                      child: _faviconUrl != null && _faviconUrl!.isNotEmpty
+                      child: _backendIconAsset != null
                           ? ClipOval(
-                              child: CachedNetworkImage(
-                                imageUrl: _faviconUrl!,
+                              child: Image.asset(
+                                _backendIconAsset!,
                                 width: 40,
                                 height: 40,
                                 fit: BoxFit.cover,
-                                errorWidget: const Icon(Icons.cloud_off),
                               ),
                             )
                           : const CircleAvatar(

@@ -289,14 +289,14 @@ class _RequestPageState extends State<RequestPage> {
         openButtonBuilder: RotateFloatingActionButtonBuilder(
           child: const Icon(Icons.add),
           fabSize: ExpandableFabSize.regular,
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-          foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Theme.of(context).colorScheme.onPrimary,
         ),
         closeButtonBuilder: DefaultFloatingActionButtonBuilder(
           child: const Icon(Icons.close),
           fabSize: ExpandableFabSize.regular,
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-          foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Theme.of(context).colorScheme.onPrimary,
         ),
         overlayStyle: ExpandableFabOverlayStyle(
           color: Colors.black.withValues(alpha: 0.5),
