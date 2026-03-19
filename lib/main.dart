@@ -804,7 +804,7 @@ class _MyHomePageState extends State<MyHomePage>
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const CloudPage()),
-                ).then((_) => _loadFavicon());
+                      ).then((_) => _loadBackendIcon());
               },
             ),
             ListTile(
