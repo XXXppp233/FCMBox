@@ -297,6 +297,10 @@ class _RequestPageState extends State<RequestPage> {
           backgroundColor: Theme.of(context).colorScheme.primaryContainer,
           foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
         ),
+        overlayStyle: ExpandableFabOverlayStyle(
+          color: Colors.black.withValues(alpha: 0.5),
+          blur: 0.5,
+        ),
         children: [
           Row(
             children: [
