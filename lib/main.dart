@@ -500,6 +500,7 @@ class _MyHomePageState extends State<MyHomePage>
 
         // Final UI refresh
         setState(() {
+          HapticFeedback.mediumImpact();
           _updateServices();
           _applyFilters();
         });

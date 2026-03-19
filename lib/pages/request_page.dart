@@ -56,6 +56,7 @@ class _RequestPageState extends State<RequestPage> {
     bool useFcmTemplate = false,
     RequestRecord? template,
   }) async {
+    HapticFeedback.mediumImpact();
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -65,6 +66,12 @@ class _RequestPageState extends State<RequestPage> {
         ),
       ),
     );
+    _loadRequests();
+  }
+
+  void _deleteRequests() async {
+    HapticFeedback.heavyImpact();
+    await DatabaseHelper.instance.deleteAllRequests();
     _loadRequests();
   }
 
@@ -276,6 +283,7 @@ class _RequestPageState extends State<RequestPage> {
       floatingActionButton: ExpandableFab(
         key: _key,
         type: ExpandableFabType.up,
+        distance: 50,
         childrenAnimation: ExpandableFabAnimation.none,
         openButtonBuilder: RotateFloatingActionButtonBuilder(
           child: const Icon(Icons.add),
@@ -294,6 +302,7 @@ class _RequestPageState extends State<RequestPage> {
             children: [
               FloatingActionButton.extended(
                 enableFeedback: true,
+                heroTag: null,
                 onPressed: () {
                   final state = _key.currentState;
                   if (state != null) {
@@ -310,6 +319,7 @@ class _RequestPageState extends State<RequestPage> {
             children: [
               FloatingActionButton.extended(
                 enableFeedback: true,
+                heroTag: null,
                 onPressed: () {
                   final state = _key.currentState;
                   if (state != null) {
@@ -319,6 +329,23 @@ class _RequestPageState extends State<RequestPage> {
                 },
                 icon: const Icon(Icons.cloud_upload_outlined),
                 label: const Text('FCM Template'),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              FloatingActionButton.extended(
+                enableFeedback: true,
+                heroTag: null,
+                onPressed: () {
+                  final state = _key.currentState;
+                  if (state != null) {
+                    state.toggle();
+                  }
+                  _deleteRequests();
+                },
+                icon: const Icon(Icons.delete_forever),
+                label: const Text('Delete All'),
               ),
             ],
           ),

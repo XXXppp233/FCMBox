@@ -46,7 +46,7 @@ CREATE TABLE notes (
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await _createImageCacheTable(db);
-    } 
+    }
     if (oldVersion < 3) {
       await db.execute('DROP TABLE IF EXISTS image_cache');
       await _createImageCacheTable(db);
@@ -93,6 +93,11 @@ CREATE TABLE IF NOT EXISTS requests (
   Future<void> deleteRequest(int timestamp) async {
     final db = await instance.database;
     await db.delete('requests', where: 'timestamp = ?', whereArgs: [timestamp]);
+  }
+
+  Future<void> deleteAllRequests() async {
+    final db = await instance.database;
+    await db.delete('requests');
   }
 
   Future<void> saveImage(String url, Uint8List data) async {
