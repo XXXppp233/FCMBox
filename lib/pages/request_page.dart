@@ -45,6 +45,65 @@ class _RequestPageState extends State<RequestPage> {
   String _methodFilter = '';
   final _key = GlobalKey<ExpandableFabState>();
 
+  List<Uri> _buildHttpCandidates(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return const [];
+    final parsed = Uri.tryParse(trimmed);
+    if (parsed == null) return const [];
+    if (parsed.hasScheme) return [parsed];
+    final https = Uri.tryParse('https://$trimmed');
+    final http = Uri.tryParse('http://$trimmed');
+    final candidates = <Uri>[];
+    if (https != null) candidates.add(https);
+    if (http != null) candidates.add(http);
+    return candidates;
+  }
+
+  bool _isHttpUri(Uri uri) {
+    return (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty;
+  }
+
+  Future<({Uri uri, http.StreamedResponse streamedResponse, bool skipPreview})>
+      _sendWithFallback({
+    required String urlInput,
+    required String method,
+    required Map<String, String> headers,
+    required String body,
+  }) async {
+    final candidates = _buildHttpCandidates(urlInput);
+    if (candidates.isEmpty) {
+      throw Exception('Invalid URL');
+    }
+
+    Object? lastError;
+    for (final candidate in candidates) {
+      if (!_isHttpUri(candidate)) {
+        lastError = Exception('Invalid URL: missing host');
+        continue;
+      }
+      final bool skipPreviewForLargeResponse =
+          method != 'GET' &&
+          await _isResponseTooLargeByHead(uri: candidate, headers: headers);
+      final request = http.Request(method, candidate);
+      request.headers.addAll(headers);
+      if (method != 'GET' && method != 'HEAD') {
+        request.body = body;
+      }
+      try {
+        final streamedResponse = await request.send();
+        return (
+          uri: candidate,
+          streamedResponse: streamedResponse,
+          skipPreview: skipPreviewForLargeResponse,
+        );
+      } catch (e) {
+        lastError = e;
+      }
+    }
+
+    throw Exception('Request failed for https and http: $lastError');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -551,31 +610,29 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
       final urlStr = _urlController.text.trim();
       if (urlStr.isEmpty) throw Exception('URL cannot be empty');
 
-      final uri = Uri.parse(urlStr);
       final headersMap = _getHeadersMap();
-      final bool skipPreviewForLargeResponse =
-          _method != 'GET' &&
-          await _isResponseTooLargeByHead(uri: uri, headers: headersMap);
       
       final prefs = await SharedPreferences.getInstance();
       final forceWebView = prefs.getBool('force_webview') ?? false;
 
+      final result = await _sendWithFallback(
+        urlInput: urlStr,
+        method: _method,
+        headers: headersMap,
+        body: _bodyController.text,
+      );
+      final uri = result.uri;
+      final streamedResponse = result.streamedResponse;
+      final skipPreviewForLargeResponse = result.skipPreview;
+
       final record = RequestRecord(
         timestamp: DateTime.now().millisecondsSinceEpoch,
-        url: urlStr,
+        url: uri.toString(),
         method: _method,
         headers: json.encode(headersMap),
         body: _bodyController.text,
       );
       await DatabaseHelper.instance.insertRequest(record);
-
-      final request = http.Request(_method, uri);
-      request.headers.addAll(headersMap);
-      if (_method != 'GET' && _method != 'HEAD') {
-        request.body = _bodyController.text;
-      }
-      
-      final streamedResponse = await request.send();
       if (skipPreviewForLargeResponse) {
         streamedResponse.stream.listen((_) {}).cancel();
         Fluttertoast.showToast(msg: "返回体过大（>1MB），已跳过预览");
@@ -613,8 +670,11 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
           String mimeType = contentType.split(';').first.trim();
           if (mimeType.isEmpty) mimeType = 'text/plain';
           
-          final base64Data = base64Encode(response.bodyBytes);
-          final dataUri = Uri.parse('data:$mimeType;base64,$base64Data');
+          final dataUri = Uri.dataFromBytes(
+            response.bodyBytes,
+            mimeType: mimeType,
+            base64: true,
+          );
 
           try {
             if (!await launchUrl(dataUri, mode: LaunchMode.inAppWebView)) {
@@ -1091,38 +1151,43 @@ class RequestDetailPage extends StatelessWidget {
     HapticFeedback.vibrate();
     Fluttertoast.showToast(msg: "Sending request...");
     try {
-      final uri = Uri.parse(record.url);
       final headersMap = json.decode(record.headers) as Map<String, dynamic>;
       final Map<String, String> stringHeaders = headersMap.map((key, value) => MapEntry(key, value.toString()));
-      final bool skipPreviewForLargeResponse =
-          record.method != 'GET' &&
-          await _isResponseTooLargeByHead(
-            uri: uri,
-            headers: stringHeaders,
-          );
-
-      if (record.method == 'GET') {
-        try {
-          if (!await launchUrl(
-            uri,
-            mode: LaunchMode.inAppWebView,
-            webViewConfiguration: WebViewConfiguration(headers: stringHeaders),
-          )) {
-            Fluttertoast.showToast(msg: "Failed to open in browser");
-          }
-        } catch (e) {
-          Fluttertoast.showToast(msg: "Error opening browser: $e");
-        }
+      final candidates = _buildHttpCandidates(record.url);
+      if (candidates.isEmpty) {
+        Fluttertoast.showToast(msg: "Invalid URL");
         return;
       }
 
-      final request = http.Request(record.method, uri);
-      request.headers.addAll(stringHeaders);
-      if (record.method != 'GET' && record.method != 'HEAD') {
-        request.body = record.body;
+      if (record.method == 'GET') {
+        Object? lastError;
+        for (final candidate in candidates) {
+          if (!_isHttpUri(candidate)) continue;
+          try {
+            final config = WebViewConfiguration(headers: stringHeaders);
+            if (await launchUrl(
+              candidate,
+              mode: LaunchMode.inAppWebView,
+              webViewConfiguration: config,
+            )) {
+              return;
+            }
+          } catch (e) {
+            lastError = e;
+          }
+        }
+        Fluttertoast.showToast(msg: "Error opening browser: $lastError");
+        return;
       }
-      
-      final streamedResponse = await request.send();
+
+      final result = await _sendWithFallback(
+        urlInput: record.url,
+        method: record.method,
+        headers: stringHeaders,
+        body: record.body,
+      );
+      final streamedResponse = result.streamedResponse;
+      final skipPreviewForLargeResponse = result.skipPreview;
       if (skipPreviewForLargeResponse) {
         streamedResponse.stream.listen((_) {}).cancel();
         Fluttertoast.showToast(msg: "返回体过大（>1MB），已跳过预览");
@@ -1134,8 +1199,11 @@ class RequestDetailPage extends StatelessWidget {
       String mimeType = contentType.split(';').first.trim();
       if (mimeType.isEmpty) mimeType = 'text/plain';
 
-      final base64Data = base64Encode(response.bodyBytes);
-      final dataUri = Uri.parse('data:$mimeType;base64,$base64Data');
+      final dataUri = Uri.dataFromBytes(
+        response.bodyBytes,
+        mimeType: mimeType,
+        base64: true,
+      );
       
       try {
         if (!await launchUrl(dataUri, mode: LaunchMode.inAppWebView)) {
