@@ -8,9 +8,28 @@ import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/request_record.dart';
 import '../db/notes_database.dart';
 import '../l10n/app_localizations.dart';
+
+const int _maxPreviewBytes = 1024 * 1024;
+
+Future<bool> _isResponseTooLargeByHead({
+  required Uri uri,
+  required Map<String, String> headers,
+}) async {
+  try {
+    final response = await http.head(uri, headers: headers);
+    final lengthHeader = response.headers['content-length'];
+    if (lengthHeader == null) return false;
+    final length = int.tryParse(lengthHeader);
+    if (length == null) return false;
+    return length > _maxPreviewBytes;
+  } catch (_) {
+    return false;
+  }
+}
 
 class RequestPage extends StatefulWidget {
   const RequestPage({super.key});
@@ -534,43 +553,12 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
 
       final uri = Uri.parse(urlStr);
       final headersMap = _getHeadersMap();
-      http.Response response;
-
-      switch (_method) {
-        case 'GET':
-          response = await http.get(uri, headers: headersMap);
-          break;
-        case 'POST':
-          response = await http.post(
-            uri,
-            headers: headersMap,
-            body: _bodyController.text,
-          );
-          break;
-        case 'PUT':
-          response = await http.put(
-            uri,
-            headers: headersMap,
-            body: _bodyController.text,
-          );
-          break;
-        case 'DELETE':
-          response = await http.delete(
-            uri,
-            headers: headersMap,
-            body: _bodyController.text,
-          );
-          break;
-        case 'PATCH':
-          response = await http.patch(
-            uri,
-            headers: headersMap,
-            body: _bodyController.text,
-          );
-          break;
-        default:
-          throw Exception('Unsupported method');
-      }
+      final bool skipPreviewForLargeResponse =
+          _method != 'GET' &&
+          await _isResponseTooLargeByHead(uri: uri, headers: headersMap);
+      
+      final prefs = await SharedPreferences.getInstance();
+      final forceWebView = prefs.getBool('force_webview') ?? false;
 
       final record = RequestRecord(
         timestamp: DateTime.now().millisecondsSinceEpoch,
@@ -579,12 +567,68 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
         headers: json.encode(headersMap),
         body: _bodyController.text,
       );
-
       await DatabaseHelper.instance.insertRequest(record);
 
-      if (!mounted) return;
-      Fluttertoast.showToast(msg: 'Response: ${response.statusCode}');
-      Navigator.pop(context);
+      final request = http.Request(_method, uri);
+      request.headers.addAll(headersMap);
+      if (_method != 'GET' && _method != 'HEAD') {
+        request.body = _bodyController.text;
+      }
+      
+      final streamedResponse = await request.send();
+      if (skipPreviewForLargeResponse) {
+        streamedResponse.stream.listen((_) {}).cancel();
+        Fluttertoast.showToast(msg: "返回体过大（>1MB），已跳过预览");
+        if (mounted) {
+          Navigator.pop(context);
+        }
+        return;
+      }
+      final contentType = streamedResponse.headers['content-type']?.toLowerCase() ?? '';
+      final contentLength = streamedResponse.contentLength;
+
+      bool useToast = !forceWebView && 
+                      contentType.contains('text/plain') && 
+                      (contentLength != null && contentLength < 100);
+
+      if (useToast) {
+        final response = await http.Response.fromStream(streamedResponse);
+        Fluttertoast.showToast(msg: "${response.statusCode} ${response.body}");
+      } else {
+        if (_method == 'GET') {
+          streamedResponse.stream.listen((_) {}).cancel(); 
+          try {
+            if (!await launchUrl(
+              uri, 
+              mode: LaunchMode.inAppWebView,
+              webViewConfiguration: WebViewConfiguration(headers: headersMap)
+            )) {
+              Fluttertoast.showToast(msg: "Failed to open in browser");
+            }
+          } catch (e) {
+            Fluttertoast.showToast(msg: "Error opening browser: $e");
+          }
+        } else {
+          final response = await http.Response.fromStream(streamedResponse);
+          String mimeType = contentType.split(';').first.trim();
+          if (mimeType.isEmpty) mimeType = 'text/plain';
+          
+          final base64Data = base64Encode(response.bodyBytes);
+          final dataUri = Uri.parse('data:$mimeType;base64,$base64Data');
+
+          try {
+            if (!await launchUrl(dataUri, mode: LaunchMode.inAppWebView)) {
+              Fluttertoast.showToast(msg: "Failed to launch WebView");
+            }
+          } catch (e) {
+            Fluttertoast.showToast(msg: "Error launching WebView: $e");
+          }
+        }
+      }
+
+      if (mounted) {
+        Navigator.pop(context);
+      }
     } catch (e) {
       Fluttertoast.showToast(msg: 'Error: $e');
     } finally {
@@ -1043,10 +1087,81 @@ class RequestDetailPage extends StatelessWidget {
     }
   }
 
+  Future<void> _resendRequestWithWebView(BuildContext context) async {
+    HapticFeedback.vibrate();
+    Fluttertoast.showToast(msg: "Sending request...");
+    try {
+      final uri = Uri.parse(record.url);
+      final headersMap = json.decode(record.headers) as Map<String, dynamic>;
+      final Map<String, String> stringHeaders = headersMap.map((key, value) => MapEntry(key, value.toString()));
+      final bool skipPreviewForLargeResponse =
+          record.method != 'GET' &&
+          await _isResponseTooLargeByHead(
+            uri: uri,
+            headers: stringHeaders,
+          );
+
+      if (record.method == 'GET') {
+        try {
+          if (!await launchUrl(
+            uri,
+            mode: LaunchMode.inAppWebView,
+            webViewConfiguration: WebViewConfiguration(headers: stringHeaders),
+          )) {
+            Fluttertoast.showToast(msg: "Failed to open in browser");
+          }
+        } catch (e) {
+          Fluttertoast.showToast(msg: "Error opening browser: $e");
+        }
+        return;
+      }
+
+      final request = http.Request(record.method, uri);
+      request.headers.addAll(stringHeaders);
+      if (record.method != 'GET' && record.method != 'HEAD') {
+        request.body = record.body;
+      }
+      
+      final streamedResponse = await request.send();
+      if (skipPreviewForLargeResponse) {
+        streamedResponse.stream.listen((_) {}).cancel();
+        Fluttertoast.showToast(msg: "返回体过大（>1MB），已跳过预览");
+        return;
+      }
+      final response = await http.Response.fromStream(streamedResponse);
+      
+      final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+      String mimeType = contentType.split(';').first.trim();
+      if (mimeType.isEmpty) mimeType = 'text/plain';
+
+      final base64Data = base64Encode(response.bodyBytes);
+      final dataUri = Uri.parse('data:$mimeType;base64,$base64Data');
+      
+      try {
+        if (!await launchUrl(dataUri, mode: LaunchMode.inAppWebView)) {
+          Fluttertoast.showToast(msg: "Failed to launch WebView");
+        }
+      } catch (e) {
+        Fluttertoast.showToast(msg: "Error launching WebView: $e");
+      }
+    } catch (e) {
+      Fluttertoast.showToast(msg: 'Error: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Request Details')),
+      appBar: AppBar(
+        title: const Text('Request Details'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => _resendRequestWithWebView(context),
+            tooltip: 'Resend & Open in WebView',
+          ),
+        ],
+      ),
       body: ListView(
         children: [
           Padding(

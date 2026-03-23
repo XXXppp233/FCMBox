@@ -66,6 +66,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get system_default => '跟随系统';
 
   @override
+  String get force_webview => '强制使用 WebView';
+
+  @override
+  String get force_webview_subtitle => '或者排除短文本';
+
+  @override
   String get on => '启用';
 
   @override

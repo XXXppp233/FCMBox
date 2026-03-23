@@ -68,6 +68,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get system_default => 'System Default';
 
   @override
+  String get force_webview => 'Force WebView';
+
+  @override
+  String get force_webview_subtitle => 'or exclude the short text';
+
+  @override
   String get on => 'On';
 
   @override

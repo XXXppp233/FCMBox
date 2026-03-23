@@ -20,6 +20,7 @@ class _SettingsPageState extends State<SettingsPage> {
   // String _leftSwipeAction = 'archive'; // Removed
   // String _rightSwipeAction = 'delete'; // Removed
   bool _useMonet = false;
+  bool _forceWebView = false;
   int _selectedColorValue = Colors.blue.toARGB32();
   String _languageCode = 'en';
   String _themeMode = 'system';
@@ -131,6 +132,14 @@ class _SettingsPageState extends State<SettingsPage> {
       _usePureDark = value;
     });
     _updateThemeSettings();
+  }
+
+  Future<void> _saveForceWebView(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('force_webview', value);
+    setState(() {
+      _forceWebView = value;
+    });
   }
 
   void _showColorPicker(BuildContext context) {
@@ -328,6 +337,30 @@ class _SettingsPageState extends State<SettingsPage> {
             //     DropdownMenuItem(value: 'zh', child: Text('简体中文')),
             //   ],
             // ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'Request API',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          SwitchListTile(
+            title: Text(
+              AppLocalizations.of(context)?.force_webview ?? 'Force WebView',
+            ),
+            subtitle: Text(
+              AppLocalizations.of(context)?.force_webview_subtitle ??
+                  'or only for json and html',
+            ),
+            value: _forceWebView,
+            onChanged: (bool value) {
+              HapticFeedback.lightImpact();
+              _saveForceWebView(value);
+            },
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
