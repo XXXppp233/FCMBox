@@ -12,25 +12,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/request_record.dart';
 import '../db/notes_database.dart';
 import '../l10n/app_localizations.dart';
-import 'local_preview_server.dart';
-
-const int _maxPreviewBytes = 1024 * 1024;
-
-Future<bool> _isResponseTooLargeByHead({
-  required Uri uri,
-  required Map<String, String> headers,
-}) async {
-  try {
-    final response = await http.head(uri, headers: headers);
-    final lengthHeader = response.headers['content-length'];
-    if (lengthHeader == null) return false;
-    final length = int.tryParse(lengthHeader);
-    if (length == null) return false;
-    return length > _maxPreviewBytes;
-  } catch (_) {
-    return false;
-  }
-}
 
 List<Uri> _buildHttpCandidates(String input) {
   final trimmed = input.trim();
@@ -50,7 +31,7 @@ bool _isHttpUri(Uri uri) {
   return (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty;
 }
 
-Future<({Uri uri, http.StreamedResponse streamedResponse, bool skipPreview})>
+Future<({Uri uri, http.StreamedResponse streamedResponse})>
     _sendWithFallback({
   required String urlInput,
   required String method,
@@ -68,9 +49,6 @@ Future<({Uri uri, http.StreamedResponse streamedResponse, bool skipPreview})>
       lastError = Exception('Invalid URL: missing host');
       continue;
     }
-    final bool skipPreviewForLargeResponse =
-        method != 'GET' &&
-        await _isResponseTooLargeByHead(uri: candidate, headers: headers);
     final request = http.Request(method, candidate);
     request.headers.addAll(headers);
     if (method != 'GET' && method != 'HEAD') {
@@ -81,7 +59,6 @@ Future<({Uri uri, http.StreamedResponse streamedResponse, bool skipPreview})>
       return (
         uri: candidate,
         streamedResponse: streamedResponse,
-        skipPreview: skipPreviewForLargeResponse,
       );
     } catch (e) {
       lastError = e;
@@ -621,7 +598,6 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
       );
       final uri = result.uri;
       final streamedResponse = result.streamedResponse;
-      final skipPreviewForLargeResponse = result.skipPreview;
 
       final record = RequestRecord(
         timestamp: DateTime.now().millisecondsSinceEpoch,
@@ -631,42 +607,10 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
         body: _bodyController.text,
       );
       await DatabaseHelper.instance.insertRequest(record);
-      if (skipPreviewForLargeResponse) {
-        streamedResponse.stream.listen((_) {}).cancel();
-        Fluttertoast.showToast(msg: "返回体过大（>1MB），已跳过预览");
-        if (mounted) {
-          Navigator.pop(context);
-        }
-        return;
-      }
-      if (_method == 'GET') {
-        streamedResponse.stream.listen((_) {}).cancel(); 
-        try {
-          if (!await launchUrl(
-            uri,
-            mode: LaunchMode.inAppWebView,
-            webViewConfiguration: WebViewConfiguration(headers: headersMap)
-          )) {
-            Fluttertoast.showToast(msg: "Failed to open in browser");
-          }
-        } catch (e) {
-          Fluttertoast.showToast(msg: "Error opening browser: $e");
-        }
-      } else {
-        final response = await http.Response.fromStream(streamedResponse);
-        try {
-          final mimeType = response.headers['content-type'] ?? 'text/html';
-          await LocalPreviewServer.instance.start(response.bodyBytes, mimeType);
-          final localUrl = Uri.parse('http://localhost:${LocalPreviewServer.instance.port}');
-          if (!await launchUrl(
-            localUrl,
-            mode: LaunchMode.inAppWebView,
-          )) {
-            Fluttertoast.showToast(msg: "Failed to launch WebView");
-          }
-        } catch (e) {
-          Fluttertoast.showToast(msg: "Error launching WebView: $e");
-        }
+
+      final response = await http.Response.fromStream(streamedResponse);
+      if (mounted) {
+        _showResponseSheet(context, response, uri.toString(), _method);
       }
 
       if (mounted) {
@@ -677,6 +621,20 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
+  }
+
+  void _showResponseSheet(BuildContext context, http.Response response, String url, String method) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ResponsePreviewSheet(
+        url: url,
+        method: method,
+        response: response,
+      ),
+    );
   }
 
   @override
@@ -1142,27 +1100,6 @@ class RequestDetailPage extends StatelessWidget {
         return;
       }
 
-      if (record.method == 'GET') {
-        Object? lastError;
-        for (final candidate in candidates) {
-          if (!_isHttpUri(candidate)) continue;
-          try {
-            final config = WebViewConfiguration(headers: stringHeaders);
-            if (await launchUrl(
-              candidate,
-              mode: LaunchMode.inAppWebView,
-              webViewConfiguration: config,
-            )) {
-              return;
-            }
-          } catch (e) {
-            lastError = e;
-          }
-        }
-        Fluttertoast.showToast(msg: "Error opening browser: $lastError");
-        return;
-      }
-
       final result = await _sendWithFallback(
         urlInput: record.url,
         method: record.method,
@@ -1170,29 +1107,28 @@ class RequestDetailPage extends StatelessWidget {
         body: record.body,
       );
       final streamedResponse = result.streamedResponse;
-      final skipPreviewForLargeResponse = result.skipPreview;
-      if (skipPreviewForLargeResponse) {
-        streamedResponse.stream.listen((_) {}).cancel();
-        Fluttertoast.showToast(msg: "返回体过大（>1MB），已跳过预览");
-        return;
-      }
+
       final response = await http.Response.fromStream(streamedResponse);
-      try {
-        final mimeType = response.headers['content-type'] ?? 'text/html';
-        await LocalPreviewServer.instance.start(response.bodyBytes, mimeType);
-        final localUrl = Uri.parse('http://localhost:${LocalPreviewServer.instance.port}');
-        if (!await launchUrl(
-          localUrl,
-          mode: LaunchMode.inAppWebView,
-        )) {
-          Fluttertoast.showToast(msg: "Failed to launch WebView");
-        }
-      } catch (e) {
-        Fluttertoast.showToast(msg: "Error launching WebView: $e");
+      if (context.mounted) {
+        _showResponseSheet(context, response, record.url, record.method);
       }
     } catch (e) {
       Fluttertoast.showToast(msg: 'Error: $e');
     }
+  }
+
+  void _showResponseSheet(BuildContext context, http.Response response, String url, String method) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ResponsePreviewSheet(
+        url: url,
+        method: method,
+        response: response,
+      ),
+    );
   }
 
   @override
@@ -1202,9 +1138,9 @@ class RequestDetailPage extends StatelessWidget {
         title: const Text('Request Details'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.open_in_browser),
+            icon: const Icon(Icons.play_arrow),
             onPressed: () => _resendRequestWithWebView(context),
-            tooltip: 'Resend & Open in WebView',
+            tooltip: 'Resend & Preview',
           ),
         ],
       ),
@@ -1250,5 +1186,132 @@ class RequestDetailPage extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class ResponsePreviewSheet extends StatelessWidget {
+  final String url;
+  final String method;
+  final http.Response response;
+
+  const ResponsePreviewSheet({
+    super.key,
+    required this.url,
+    required this.method,
+    required this.response,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    String language = 'plaintext';
+    final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+    if (contentType.contains('json')) {
+      language = 'json';
+    } else if (contentType.contains('html') || contentType.contains('xml')) {
+      language = 'xml';
+    }
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _getStatusColor(response.statusCode).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            response.statusCode.toString(),
+                            style: TextStyle(
+                              color: _getStatusColor(response.statusCode),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            url,
+                            style: Theme.of(context).textTheme.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Headers', style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: response.headers.entries.map((e) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: SelectableText(
+                            '${e.key}: ${e.value}',
+                            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                          ),
+                        )).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Body', style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    HighlightView(
+                      response.body,
+                      language: language,
+                      theme: Theme.of(context).brightness == Brightness.dark
+                          ? atomOneDarkTheme
+                          : atomOneLightTheme,
+                      padding: const EdgeInsets.all(12),
+                      textStyle: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Color _getStatusColor(int code) {
+    if (code >= 200 && code < 300) return Colors.green;
+    if (code >= 400) return Colors.red;
+    return Colors.orange;
   }
 }
