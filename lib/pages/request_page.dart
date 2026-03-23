@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/request_record.dart';
 import '../db/notes_database.dart';
 import '../l10n/app_localizations.dart';
+import 'local_preview_server.dart';
 
 const int _maxPreviewBytes = 1024 * 1024;
 
@@ -612,9 +613,6 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
 
       final headersMap = _getHeadersMap();
       
-      final prefs = await SharedPreferences.getInstance();
-      final forceWebView = prefs.getBool('force_webview') ?? false;
-
       final result = await _sendWithFallback(
         urlInput: urlStr,
         method: _method,
@@ -641,47 +639,33 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
         }
         return;
       }
-      final contentType = streamedResponse.headers['content-type']?.toLowerCase() ?? '';
-      final contentLength = streamedResponse.contentLength;
-
-      bool useToast = !forceWebView && 
-                      contentType.contains('text/plain') && 
-                      (contentLength != null && contentLength < 100);
-
-      if (useToast) {
-        final response = await http.Response.fromStream(streamedResponse);
-        Fluttertoast.showToast(msg: "${response.statusCode} ${response.body}");
+      if (_method == 'GET') {
+        streamedResponse.stream.listen((_) {}).cancel(); 
+        try {
+          if (!await launchUrl(
+            uri,
+            mode: LaunchMode.inAppWebView,
+            webViewConfiguration: WebViewConfiguration(headers: headersMap)
+          )) {
+            Fluttertoast.showToast(msg: "Failed to open in browser");
+          }
+        } catch (e) {
+          Fluttertoast.showToast(msg: "Error opening browser: $e");
+        }
       } else {
-        if (_method == 'GET') {
-          streamedResponse.stream.listen((_) {}).cancel(); 
-          try {
-            if (!await launchUrl(
-              uri, 
-              mode: LaunchMode.inAppWebView,
-              webViewConfiguration: WebViewConfiguration(headers: headersMap)
-            )) {
-              Fluttertoast.showToast(msg: "Failed to open in browser");
-            }
-          } catch (e) {
-            Fluttertoast.showToast(msg: "Error opening browser: $e");
+        final response = await http.Response.fromStream(streamedResponse);
+        try {
+          final mimeType = response.headers['content-type'] ?? 'text/html';
+          await LocalPreviewServer.instance.start(response.bodyBytes, mimeType);
+          final localUrl = Uri.parse('http://localhost:${LocalPreviewServer.instance.port}');
+          if (!await launchUrl(
+            localUrl,
+            mode: LaunchMode.inAppWebView,
+          )) {
+            Fluttertoast.showToast(msg: "Failed to launch WebView");
           }
-        } else {
-          final response = await http.Response.fromStream(streamedResponse);
-          String mimeType = contentType.split(';').first.trim();
-          if (mimeType.isEmpty) mimeType = 'text/plain';
-          
-          final dataUri = Uri.dataFromBytes(
-            response.bodyBytes,
-            mimeType: mimeType,
-          );
-
-          try {
-            if (!await launchUrl(dataUri, mode: LaunchMode.inAppWebView)) {
-              Fluttertoast.showToast(msg: "Failed to launch WebView");
-            }
-          } catch (e) {
-            Fluttertoast.showToast(msg: "Error launching WebView: $e");
-          }
+        } catch (e) {
+          Fluttertoast.showToast(msg: "Error launching WebView: $e");
         }
       }
 
@@ -1193,18 +1177,14 @@ class RequestDetailPage extends StatelessWidget {
         return;
       }
       final response = await http.Response.fromStream(streamedResponse);
-      
-      final contentType = response.headers['content-type']?.toLowerCase() ?? '';
-      String mimeType = contentType.split(';').first.trim();
-      if (mimeType.isEmpty) mimeType = 'text/plain';
-
-      final dataUri = Uri.dataFromBytes(
-        response.bodyBytes,
-        mimeType: mimeType,
-      );
-      
       try {
-        if (!await launchUrl(dataUri, mode: LaunchMode.inAppWebView)) {
+        final mimeType = response.headers['content-type'] ?? 'text/html';
+        await LocalPreviewServer.instance.start(response.bodyBytes, mimeType);
+        final localUrl = Uri.parse('http://localhost:${LocalPreviewServer.instance.port}');
+        if (!await launchUrl(
+          localUrl,
+          mode: LaunchMode.inAppWebView,
+        )) {
           Fluttertoast.showToast(msg: "Failed to launch WebView");
         }
       } catch (e) {
