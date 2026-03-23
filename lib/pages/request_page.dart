@@ -31,6 +31,65 @@ Future<bool> _isResponseTooLargeByHead({
   }
 }
 
+List<Uri> _buildHttpCandidates(String input) {
+  final trimmed = input.trim();
+  if (trimmed.isEmpty) return const [];
+  final parsed = Uri.tryParse(trimmed);
+  if (parsed == null) return const [];
+  if (parsed.hasScheme) return [parsed];
+  final https = Uri.tryParse('https://$trimmed');
+  final http = Uri.tryParse('http://$trimmed');
+  final candidates = <Uri>[];
+  if (https != null) candidates.add(https);
+  if (http != null) candidates.add(http);
+  return candidates;
+}
+
+bool _isHttpUri(Uri uri) {
+  return (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty;
+}
+
+Future<({Uri uri, http.StreamedResponse streamedResponse, bool skipPreview})>
+    _sendWithFallback({
+  required String urlInput,
+  required String method,
+  required Map<String, String> headers,
+  required String body,
+}) async {
+  final candidates = _buildHttpCandidates(urlInput);
+  if (candidates.isEmpty) {
+    throw Exception('Invalid URL');
+  }
+
+  Object? lastError;
+  for (final candidate in candidates) {
+    if (!_isHttpUri(candidate)) {
+      lastError = Exception('Invalid URL: missing host');
+      continue;
+    }
+    final bool skipPreviewForLargeResponse =
+        method != 'GET' &&
+        await _isResponseTooLargeByHead(uri: candidate, headers: headers);
+    final request = http.Request(method, candidate);
+    request.headers.addAll(headers);
+    if (method != 'GET' && method != 'HEAD') {
+      request.body = body;
+    }
+    try {
+      final streamedResponse = await request.send();
+      return (
+        uri: candidate,
+        streamedResponse: streamedResponse,
+        skipPreview: skipPreviewForLargeResponse,
+      );
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  throw Exception('Request failed for https and http: $lastError');
+}
+
 class RequestPage extends StatefulWidget {
   const RequestPage({super.key});
 
@@ -44,65 +103,6 @@ class _RequestPageState extends State<RequestPage> {
   String _domainFilter = '';
   String _methodFilter = '';
   final _key = GlobalKey<ExpandableFabState>();
-
-  List<Uri> _buildHttpCandidates(String input) {
-    final trimmed = input.trim();
-    if (trimmed.isEmpty) return const [];
-    final parsed = Uri.tryParse(trimmed);
-    if (parsed == null) return const [];
-    if (parsed.hasScheme) return [parsed];
-    final https = Uri.tryParse('https://$trimmed');
-    final http = Uri.tryParse('http://$trimmed');
-    final candidates = <Uri>[];
-    if (https != null) candidates.add(https);
-    if (http != null) candidates.add(http);
-    return candidates;
-  }
-
-  bool _isHttpUri(Uri uri) {
-    return (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty;
-  }
-
-  Future<({Uri uri, http.StreamedResponse streamedResponse, bool skipPreview})>
-      _sendWithFallback({
-    required String urlInput,
-    required String method,
-    required Map<String, String> headers,
-    required String body,
-  }) async {
-    final candidates = _buildHttpCandidates(urlInput);
-    if (candidates.isEmpty) {
-      throw Exception('Invalid URL');
-    }
-
-    Object? lastError;
-    for (final candidate in candidates) {
-      if (!_isHttpUri(candidate)) {
-        lastError = Exception('Invalid URL: missing host');
-        continue;
-      }
-      final bool skipPreviewForLargeResponse =
-          method != 'GET' &&
-          await _isResponseTooLargeByHead(uri: candidate, headers: headers);
-      final request = http.Request(method, candidate);
-      request.headers.addAll(headers);
-      if (method != 'GET' && method != 'HEAD') {
-        request.body = body;
-      }
-      try {
-        final streamedResponse = await request.send();
-        return (
-          uri: candidate,
-          streamedResponse: streamedResponse,
-          skipPreview: skipPreviewForLargeResponse,
-        );
-      } catch (e) {
-        lastError = e;
-      }
-    }
-
-    throw Exception('Request failed for https and http: $lastError');
-  }
 
   @override
   void initState() {
@@ -673,7 +673,6 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
           final dataUri = Uri.dataFromBytes(
             response.bodyBytes,
             mimeType: mimeType,
-            base64: true,
           );
 
           try {
@@ -1202,7 +1201,6 @@ class RequestDetailPage extends StatelessWidget {
       final dataUri = Uri.dataFromBytes(
         response.bodyBytes,
         mimeType: mimeType,
-        base64: true,
       );
       
       try {
