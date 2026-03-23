@@ -18,6 +18,8 @@
   "pure_dark_mode": "纯粹深色",
   "pure_dark_mode_subtitle": "深色模式下使用纯黑背景",
   "system_default": "跟随系统",
+  "force_webview": "强制使用 WebView",
+  "force_webview_subtitle": "或者排除短文本",
   "on": "启用",
   "off": "禁用",
   "no_results": "无结果",

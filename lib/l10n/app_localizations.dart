@@ -212,7 +212,16 @@ abstract class AppLocalizations {
   /// **'System Default'**
   String get system_default;
 
+  /// No description provided for @force_webview.
+  ///
+  /// In en, this message translates to:
+  /// **'Force WebView'**
   String get force_webview;
+
+  /// No description provided for @force_webview_subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'or exclude the short text'**
   String get force_webview_subtitle;
 
   /// No description provided for @on.

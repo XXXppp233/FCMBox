@@ -18,6 +18,8 @@
   "pure_dark_mode": "Pure Dark Mode",
   "pure_dark_mode_subtitle": "Use pure black background in dark mode",
   "system_default": "System Default",
+  "force_webview": "Force WebView",
+  "force_webview_subtitle": "or exclude the short text",
   "on": "On",
   "off": "Off",
   "no_results": "No results",
