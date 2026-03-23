@@ -368,6 +368,18 @@ abstract class AppLocalizations {
   /// **'Close'**
   String get close;
 
+  /// No description provided for @request_storage_directory.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage Directory'**
+  String get request_storage_directory;
+
+  /// No description provided for @request_storage_path_empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get request_storage_path_empty;
+
   /// No description provided for @request_api.
   ///
   /// In en, this message translates to:

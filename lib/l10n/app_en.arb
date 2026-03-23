@@ -44,5 +44,7 @@
   "copied_to_clipboard": "Copied to clipboard",
   "copy": "Copy",
   "close": "Close",
+  "request_storage_directory": "Storage Directory",
+  "request_storage_path_empty": "Not set",
   "request_api": "Request API"
 }

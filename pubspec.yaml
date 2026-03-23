@@ -57,6 +57,7 @@ dependencies:
   highlight: ^0.7.0
   flutter_expandable_fab: ^2.5.2
   connectivity_plus: ^7.0.0
+  open_filex: ^4.7.0
 
 dev_dependencies:
   flutter_test:

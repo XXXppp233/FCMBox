@@ -4,6 +4,7 @@ class RequestRecord {
   final String method;
   final String headers;
   final String body;
+  final String? responsePath;
 
   RequestRecord({
     required this.timestamp,
@@ -11,6 +12,7 @@ class RequestRecord {
     required this.method,
     required this.headers,
     required this.body,
+    this.responsePath,
   });
 
   factory RequestRecord.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class RequestRecord {
       method: json['method'] as String,
       headers: json['headers'] as String,
       body: json['body'] as String,
+      responsePath: json['response_path'] as String?,
     );
   }
 
@@ -30,6 +33,7 @@ class RequestRecord {
       'method': method,
       'headers': headers,
       'body': body,
+      'response_path': responsePath,
     };
   }
 }

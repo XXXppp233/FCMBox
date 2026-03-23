@@ -1,14 +1,18 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../models/request_record.dart';
 import '../db/notes_database.dart';
 import '../l10n/app_localizations.dart';
@@ -31,8 +35,50 @@ bool _isHttpUri(Uri uri) {
   return (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty;
 }
 
-Future<({Uri uri, http.StreamedResponse streamedResponse})>
-    _sendWithFallback({
+Future<String> _resolveFixedRequestDirectory() async {
+  if (Platform.isAndroid) {
+    return p.join('/storage/emulated/0/Download', 'FCMBox');
+  }
+  final dir = await getApplicationDocumentsDirectory();
+  return p.join(dir.path, 'Downloads', 'FCMBox');
+}
+
+Future<String> _getRequestStorageDirectory() async {
+  return _resolveFixedRequestDirectory();
+}
+
+String _guessExtension(String contentType) {
+  final base = contentType.split(';').first.trim();
+  if (base.contains('json')) return 'json';
+  if (base.contains('html')) return 'html';
+  if (base.contains('xml')) return 'xml';
+  if (base.startsWith('text/')) return 'txt';
+  if (base.contains('/')) {
+    final subtype = base.split('/').last;
+    final cleaned = subtype.split('+').first;
+    if (cleaned.isNotEmpty) return cleaned;
+  }
+  return 'bin';
+}
+
+Future<String?> _saveResponseToFile(
+  http.Response response,
+  int timestamp,
+) async {
+  final dirPath = await _getRequestStorageDirectory();
+  final dir = Directory(dirPath);
+  if (!await dir.exists()) {
+    await dir.create(recursive: true);
+  }
+  final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+  final ext = _guessExtension(contentType);
+  final filePath = p.join(dirPath, 'request_$timestamp.$ext');
+  final file = File(filePath);
+  await file.writeAsBytes(response.bodyBytes, flush: true);
+  return filePath;
+}
+
+Future<({Uri uri, http.StreamedResponse streamedResponse})> _sendWithFallback({
   required String urlInput,
   required String method,
   required Map<String, String> headers,
@@ -56,10 +102,7 @@ Future<({Uri uri, http.StreamedResponse streamedResponse})>
     }
     try {
       final streamedResponse = await request.send();
-      return (
-        uri: candidate,
-        streamedResponse: streamedResponse,
-      );
+      return (uri: candidate, streamedResponse: streamedResponse);
     } catch (e) {
       lastError = e;
     }
@@ -589,7 +632,7 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
       if (urlStr.isEmpty) throw Exception('URL cannot be empty');
 
       final headersMap = _getHeadersMap();
-      
+
       final result = await _sendWithFallback(
         urlInput: urlStr,
         method: _method,
@@ -599,16 +642,24 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
       final uri = result.uri;
       final streamedResponse = result.streamedResponse;
 
+      final response = await http.Response.fromStream(streamedResponse);
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      String? responsePath;
+      try {
+        responsePath = await _saveResponseToFile(response, timestamp);
+      } catch (e) {
+        Fluttertoast.showToast(msg: 'Failed to save response: $e');
+      }
+
       final record = RequestRecord(
-        timestamp: DateTime.now().millisecondsSinceEpoch,
+        timestamp: timestamp,
         url: uri.toString(),
         method: _method,
         headers: json.encode(headersMap),
         body: _bodyController.text,
+        responsePath: responsePath,
       );
       await DatabaseHelper.instance.insertRequest(record);
-
-      final response = await http.Response.fromStream(streamedResponse);
       if (mounted) {
         _showResponseSheet(context, response, uri.toString(), _method);
       }
@@ -623,17 +674,19 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
     }
   }
 
-  void _showResponseSheet(BuildContext context, http.Response response, String url, String method) {
+  void _showResponseSheet(
+    BuildContext context,
+    http.Response response,
+    String url,
+    String method,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => ResponsePreviewSheet(
-        url: url,
-        method: method,
-        response: response,
-      ),
+      builder: (context) =>
+          ResponsePreviewSheet(url: url, method: method, response: response),
     );
   }
 
@@ -1044,29 +1097,13 @@ class RequestDetailPage extends StatelessWidget {
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: isJson
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: HighlightView(
-                  prettyJson,
-                  language: 'json',
-                  theme: Theme.of(context).brightness == Brightness.dark
-                      ? atomOneDarkTheme
-                      : atomOneLightTheme,
-                  padding: const EdgeInsets.all(16.0),
-                  textStyle: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 14,
-                  ),
-                ),
-              )
-            : Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: SelectableText(
-                  record.body,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
-                ),
-              ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: SelectableText(
+            isJson ? prettyJson : record.body,
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
+          ),
+        ),
       ),
     );
   }
@@ -1088,45 +1125,42 @@ class RequestDetailPage extends StatelessWidget {
     }
   }
 
-  Future<void> _resendRequestWithWebView(BuildContext context) async {
-    HapticFeedback.vibrate();
-    Fluttertoast.showToast(msg: "Sending request...");
-    try {
-      final headersMap = json.decode(record.headers) as Map<String, dynamic>;
-      final Map<String, String> stringHeaders = headersMap.map((key, value) => MapEntry(key, value.toString()));
-      final candidates = _buildHttpCandidates(record.url);
-      if (candidates.isEmpty) {
-        Fluttertoast.showToast(msg: "Invalid URL");
-        return;
-      }
-
-      final result = await _sendWithFallback(
-        urlInput: record.url,
-        method: record.method,
-        headers: stringHeaders,
-        body: record.body,
-      );
-      final streamedResponse = result.streamedResponse;
-
-      final response = await http.Response.fromStream(streamedResponse);
-      if (context.mounted) {
-        _showResponseSheet(context, response, record.url, record.method);
-      }
-    } catch (e) {
-      Fluttertoast.showToast(msg: 'Error: $e');
+  Future<void> _openResponseFile() async {
+    final path = record.responsePath;
+    if (path == null || path.isEmpty) {
+      Fluttertoast.showToast(msg: 'Response file not found');
+      return;
     }
+    final file = File(path);
+    if (!await file.exists()) {
+      Fluttertoast.showToast(msg: 'Response file not found');
+      return;
+    }
+    await OpenFilex.open(path);
   }
 
-  void _showResponseSheet(BuildContext context, http.Response response, String url, String method) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => ResponsePreviewSheet(
-        url: url,
-        method: method,
-        response: response,
+  Widget _buildLocationSection(BuildContext context) {
+    final path = record.responsePath;
+    if (path == null || path.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16.0),
+        child: Text('(Empty)', style: TextStyle(color: Colors.grey)),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: SelectableText(
+          path,
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+        ),
       ),
     );
   }
@@ -1138,9 +1172,9 @@ class RequestDetailPage extends StatelessWidget {
         title: const Text('Request Details'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.play_arrow),
-            onPressed: () => _resendRequestWithWebView(context),
-            tooltip: 'Resend & Preview',
+            icon: const Icon(Icons.open_in_new),
+            onPressed: _openResponseFile,
+            tooltip: 'Open File',
           ),
         ],
       ),
@@ -1181,6 +1215,17 @@ class RequestDetailPage extends StatelessWidget {
             ),
           ),
           _buildBodySection(context),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Text(
+              'Location',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          _buildLocationSection(context),
 
           const SizedBox(height: 32),
         ],
@@ -1243,9 +1288,14 @@ class ResponsePreviewSheet extends StatelessWidget {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: _getStatusColor(response.statusCode).withOpacity(0.1),
+                            color: _getStatusColor(
+                              response.statusCode,
+                            ).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -1268,23 +1318,37 @@ class ResponsePreviewSheet extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Text('Headers', style: Theme.of(context).textTheme.titleSmall),
+                    Text(
+                      'Headers',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceVariant.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: response.headers.entries.map((e) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: SelectableText(
-                            '${e.key}: ${e.value}',
-                            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                          ),
-                        )).toList(),
+                        children: response.headers.entries
+                            .map(
+                              (e) => Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
+                                child: SelectableText(
+                                  '${e.key}: ${e.value}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -1297,7 +1361,10 @@ class ResponsePreviewSheet extends StatelessWidget {
                           ? atomOneDarkTheme
                           : atomOneLightTheme,
                       padding: const EdgeInsets.all(12),
-                      textStyle: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                      textStyle: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),

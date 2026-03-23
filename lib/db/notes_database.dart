@@ -1,7 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'dart:convert';
-import 'dart:typed_data';
 import '../models/note.dart';
 import '../models/request_record.dart';
 
@@ -23,7 +25,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -54,6 +56,11 @@ CREATE TABLE notes (
     if (oldVersion < 4) {
       await _createRequestsTable(db);
     }
+    if (oldVersion < 5) {
+      await db.execute(
+        'ALTER TABLE requests ADD COLUMN response_path TEXT',
+      );
+    }
   }
 
   Future<void> _createImageCacheTable(Database db) async {
@@ -72,7 +79,8 @@ CREATE TABLE IF NOT EXISTS requests (
   url TEXT NOT NULL,
   method TEXT NOT NULL,
   headers TEXT NOT NULL,
-  body TEXT NOT NULL
+  body TEXT NOT NULL,
+  response_path TEXT
 )
     ''');
   }
@@ -90,13 +98,39 @@ CREATE TABLE IF NOT EXISTS requests (
     return result.map((json) => RequestRecord.fromJson(json)).toList();
   }
 
+  Future<RequestRecord?> readRequest(int timestamp) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'requests',
+      where: 'timestamp = ?',
+      whereArgs: [timestamp],
+      limit: 1,
+    );
+    if (result.isEmpty) return null;
+    return RequestRecord.fromJson(result.first);
+  }
+
+  Future<void> _deleteFileIfExists(String? path) async {
+    if (path == null || path.isEmpty) return;
+    final file = File(path);
+    if (await file.exists()) {
+      await file.delete();
+    }
+  }
+
   Future<void> deleteRequest(int timestamp) async {
     final db = await instance.database;
+    final record = await readRequest(timestamp);
+    await _deleteFileIfExists(record?.responsePath);
     await db.delete('requests', where: 'timestamp = ?', whereArgs: [timestamp]);
   }
 
   Future<void> deleteAllRequests() async {
     final db = await instance.database;
+    final result = await db.query('requests', columns: ['response_path']);
+    for (final row in result) {
+      await _deleteFileIfExists(row['response_path'] as String?);
+    }
     await db.delete('requests');
   }
 

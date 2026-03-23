@@ -44,5 +44,7 @@
   "copied_to_clipboard": "已复制到剪贴板",
   "copy": "复制",
   "close": "关闭",
+  "request_storage_directory": "存储目录",
+  "request_storage_path_empty": "未设置",
   "request_api": "请求 API"
 }

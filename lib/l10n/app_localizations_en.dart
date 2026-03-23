@@ -147,5 +147,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get close => 'Close';
 
   @override
+  String get request_storage_directory => 'Storage Directory';
+
+  @override
+  String get request_storage_path_empty => 'Not set';
+
+  @override
   String get request_api => 'Request API';
 }

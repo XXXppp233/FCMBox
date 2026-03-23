@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:android_intent_plus/android_intent.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +9,9 @@ import 'package:fcm_box/l10n/app_localizations.dart';
 import 'package:fcm_box/locale_settings.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsPage extends StatefulWidget {
   final Future<void> Function()? onSync;
@@ -20,11 +26,11 @@ class _SettingsPageState extends State<SettingsPage> {
   // String _leftSwipeAction = 'archive'; // Removed
   // String _rightSwipeAction = 'delete'; // Removed
   bool _useMonet = false;
-  bool _forceWebView = false;
   int _selectedColorValue = Colors.blue.toARGB32();
   String _languageCode = 'en';
   String _themeMode = 'system';
   bool _usePureDark = false;
+  String _requestStorageDir = '';
   // GoogleSignInAccount? _currentUser;
 
   final List<Color> _colors = [
@@ -78,6 +84,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    final resolvedDir = await _resolveFixedStorageDir();
     setState(() {
       _useMonet = prefs.getBool('use_monet') ?? false;
       _selectedColorValue =
@@ -85,6 +92,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _languageCode = prefs.getString('language_code') ?? 'en';
       _themeMode = prefs.getString('theme_mode') ?? 'system';
       _usePureDark = prefs.getBool('use_pure_dark') ?? false;
+      _requestStorageDir = resolvedDir;
     });
   }
 
@@ -134,12 +142,43 @@ class _SettingsPageState extends State<SettingsPage> {
     _updateThemeSettings();
   }
 
-  Future<void> _saveForceWebView(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('force_webview', value);
-    setState(() {
-      _forceWebView = value;
-    });
+  Future<String> _resolveFixedStorageDir() async {
+    if (Platform.isAndroid) {
+      return p.join('/storage/emulated/0/Download', 'FCMBox');
+    }
+    final dir = await getApplicationDocumentsDirectory();
+    return p.join(dir.path, 'Downloads', 'FCMBox');
+  }
+
+  Future<void> _openRequestStorageDir() async {
+    if (_requestStorageDir.isEmpty) {
+      Fluttertoast.showToast(msg: 'Storage directory not set');
+      return;
+    }
+
+    try {
+      if (Platform.isAndroid) {
+        final intent = AndroidIntent(
+          action: 'android.intent.action.VIEW',
+          data: Uri.encodeFull('file://$_requestStorageDir'),
+          type: 'resource/folder',
+        );
+        await intent.launch();
+      } else {
+        final uri = Uri.file(_requestStorageDir);
+        if (!await launchUrl(uri)) {
+          Fluttertoast.showToast(msg: 'Failed to open directory');
+        }
+      }
+    } catch (_) {
+      Fluttertoast.showToast(msg: 'Failed to open directory');
+    }
+  }
+
+  Future<void> _copyRequestStorageDir() async {
+    if (_requestStorageDir.isEmpty) return;
+    HapticFeedback.mediumImpact();
+    await Clipboard.setData(ClipboardData(text: _requestStorageDir));
   }
 
   void _showColorPicker(BuildContext context) {
@@ -348,19 +387,23 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ),
-          SwitchListTile(
+          ListTile(
+            leading: const Icon(Icons.folder),
             title: Text(
-              AppLocalizations.of(context)?.force_webview ?? 'Force WebView',
+              AppLocalizations.of(context)?.request_storage_directory ??
+                  'Storage Directory',
             ),
             subtitle: Text(
-              AppLocalizations.of(context)?.force_webview_subtitle ??
-                  'or only for json and html',
+              _requestStorageDir.isEmpty
+                  ? (AppLocalizations.of(context)?.request_storage_path_empty ??
+                        'Not set')
+                  : _requestStorageDir,
             ),
-            value: _forceWebView,
-            onChanged: (bool value) {
+            onTap: () {
               HapticFeedback.lightImpact();
-              _saveForceWebView(value);
+              _openRequestStorageDir();
             },
+            onLongPress: _copyRequestStorageDir,
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),

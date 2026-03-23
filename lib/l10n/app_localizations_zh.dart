@@ -144,5 +144,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get close => '关闭';
 
   @override
+  String get request_storage_directory => '存储目录';
+
+  @override
+  String get request_storage_path_empty => '未设置';
+
+  @override
   String get request_api => '请求 API';
 }
