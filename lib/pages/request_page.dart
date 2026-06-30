@@ -413,28 +413,10 @@ class _RequestPageState extends State<RequestPage> {
                   if (state != null) {
                     state.toggle();
                   }
-                  _openComposer();
-                },
-                icon: const Icon(Icons.insert_drive_file_outlined),
-                label: const Text('Blank Request'),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              FloatingActionButton.extended(
-                enableFeedback: true,
-                heroTag: null,
-                shape: const StadiumBorder(),
-                onPressed: () {
-                  final state = _key.currentState;
-                  if (state != null) {
-                    state.toggle();
-                  }
                   _openComposer(useFcmTemplate: true);
                 },
                 icon: const Icon(Icons.cloud_upload_outlined),
-                label: const Text('FCM Template'),
+                label: const Text('FCM Request'),
               ),
             ],
           ),
@@ -497,8 +479,10 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
   String _method = 'GET';
   final _urlController = TextEditingController();
   final _bodyController = TextEditingController();
+  final _fcmDataController = TextEditingController();
   final List<Map<String, TextEditingController>> _headers = [];
   bool _isJsonMode = true;
+  bool _isPreviewMode = false;
   bool _isSending = false;
 
   static const List<String> _commonHeaders = [
@@ -522,6 +506,30 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
   void initState() {
     super.initState();
     _initTemplate();
+    _fcmDataController.addListener(_updateFcmBody);
+  }
+
+  void _updateFcmBody() {
+    if (widget.useFcmTemplate && !_isPreviewMode) {
+      try {
+        final Map<String, dynamic> bodyMap = json.decode(_bodyController.text);
+        bodyMap['data'] = _fcmDataController.text;
+        _bodyController.text = const JsonEncoder.withIndent('  ').convert(bodyMap);
+      } catch (_) {}
+    }
+  }
+
+  @override
+  void dispose() {
+    _fcmDataController.removeListener(_updateFcmBody);
+    _fcmDataController.dispose();
+    _urlController.dispose();
+    _bodyController.dispose();
+    for (var h in _headers) {
+      h['key']?.dispose();
+      h['value']?.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _initTemplate() async {
@@ -541,6 +549,13 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
           });
         }
       } catch (_) {}
+
+      if (widget.useFcmTemplate) {
+        try {
+          final Map<String, dynamic> bodyMap = json.decode(_bodyController.text);
+          _fcmDataController.text = bodyMap['data']?.toString() ?? '';
+        } catch (_) {}
+      }
     } else if (widget.useFcmTemplate) {
       _method = 'POST';
       final prefs = await SharedPreferences.getInstance();
@@ -557,13 +572,15 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
         });
       }
 
-      _bodyController.text = '''{
-  "action": "message",
-  "service": "FCMBox Request",
-  "overview": "This is a test request",
-  "data": "This is a test data",
-  "image": "https://apac-east1-i.wepayto.win/MD3/check_circle.png"
-}''';
+      final fcmBody = {
+        "action": "message",
+        "service": "FCMBox Request",
+        "overview": "",
+        "data": "",
+        "image": ""
+      };
+      _bodyController.text = const JsonEncoder.withIndent('  ').convert(fcmBody);
+      _fcmDataController.text = "";
       _fillDefaultHeaders();
     } else {
       _fillDefaultHeaders();
@@ -715,27 +732,28 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
         padding: const EdgeInsets.symmetric(vertical: 8.0),
         children: [
           // URL Section
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16.0,
-              vertical: 8.0,
-            ),
-            child: TextField(
-              controller: _urlController,
-              decoration: InputDecoration(
-                labelText: 'URL',
-                hintText: 'https://api.example.com',
-                filled: true,
-                fillColor: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainerHighest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+          if (!widget.useFcmTemplate)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
+              ),
+              child: TextField(
+                controller: _urlController,
+                decoration: InputDecoration(
+                  labelText: 'URL',
+                  hintText: 'https://api.example.com',
+                  filled: true,
+                  fillColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
             ),
-          ),
 
           // Method Section
           Padding(
@@ -746,6 +764,7 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
             child: DropdownMenu<String>(
               initialSelection: _method,
               label: const Text('Method'),
+              enabled: !widget.useFcmTemplate,
               expandedInsets: EdgeInsets.zero,
               inputDecorationTheme: InputDecorationTheme(
                 filled: true,
@@ -793,62 +812,80 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
                   children: [
                     Expanded(
                       flex: 2,
-                      child: Autocomplete<String>(
-                        optionsBuilder: (TextEditingValue textEditingValue) {
-                          if (textEditingValue.text.isEmpty) {
-                            return const Iterable<String>.empty();
-                          }
-                          return _commonHeaders.where((String option) {
-                            return option.toLowerCase().contains(
-                              textEditingValue.text.toLowerCase(),
-                            );
-                          });
-                        },
-                        onSelected: (String selection) {
-                          _headers[index]['key']!.text = selection;
-                          _ensureEmptyHeaderRow();
-                        },
-                        fieldViewBuilder:
-                            (
-                              context,
-                              textEditingController,
-                              focusNode,
-                              onFieldSubmitted,
-                            ) {
-                              if (textEditingController.text !=
-                                  _headers[index]['key']!.text) {
-                                textEditingController.text =
-                                    _headers[index]['key']!.text;
-                              }
-
-                              return TextField(
-                                controller: textEditingController,
-                                focusNode: focusNode,
-                                onChanged: (val) {
-                                  _headers[index]['key']!.text = val;
-                                  _ensureEmptyHeaderRow();
-                                },
-                                decoration: InputDecoration(
-                                  hintText: 'Key',
-                                  isDense: true,
-                                  filled: true,
-                                  fillColor: Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainerHighest,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
-                                  ),
+                      child: widget.useFcmTemplate
+                          ? TextField(
+                              controller: _headers[index]['key'],
+                              readOnly: true,
+                              decoration: InputDecoration(
+                                hintText: 'Key',
+                                isDense: true,
+                                filled: true,
+                                fillColor: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
                                 ),
-                              );
-                            },
-                      ),
+                              ),
+                            )
+                          : Autocomplete<String>(
+                              optionsBuilder: (TextEditingValue textEditingValue) {
+                                if (textEditingValue.text.isEmpty) {
+                                  return const Iterable<String>.empty();
+                                }
+                                return _commonHeaders.where((String option) {
+                                  return option.toLowerCase().contains(
+                                    textEditingValue.text.toLowerCase(),
+                                  );
+                                });
+                              },
+                              onSelected: (String selection) {
+                                _headers[index]['key']!.text = selection;
+                                _ensureEmptyHeaderRow();
+                              },
+                              fieldViewBuilder:
+                                  (
+                                    context,
+                                    textEditingController,
+                                    focusNode,
+                                    onFieldSubmitted,
+                                  ) {
+                                    if (textEditingController.text !=
+                                        _headers[index]['key']!.text) {
+                                      textEditingController.text =
+                                          _headers[index]['key']!.text;
+                                    }
+
+                                    return TextField(
+                                      controller: textEditingController,
+                                      focusNode: focusNode,
+                                      onChanged: (val) {
+                                        _headers[index]['key']!.text = val;
+                                        _ensureEmptyHeaderRow();
+                                      },
+                                      decoration: InputDecoration(
+                                        hintText: 'Key',
+                                        isDense: true,
+                                        filled: true,
+                                        fillColor: Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainerHighest,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                            ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       flex: 3,
                       child: TextField(
                         controller: _headers[index]['value'],
+                        readOnly: widget.useFcmTemplate,
                         decoration: InputDecoration(
                           hintText: 'Value',
                           isDense: true,
@@ -864,21 +901,22 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
                         onChanged: (_) => _ensureEmptyHeaderRow(),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 20),
-                      onPressed:
-                          index == _headers.length - 1 &&
-                              _headers[index]['key']!.text.isEmpty &&
-                              _headers[index]['value']!.text.isEmpty
-                          ? null
-                          : () {
-                              HapticFeedback.lightImpact();
-                              setState(() {
-                                _headers.removeAt(index);
-                                _ensureEmptyHeaderRow();
-                              });
-                            },
-                    ),
+                    if (!widget.useFcmTemplate)
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed:
+                            index == _headers.length - 1 &&
+                                _headers[index]['key']!.text.isEmpty &&
+                                _headers[index]['value']!.text.isEmpty
+                            ? null
+                            : () {
+                                HapticFeedback.lightImpact();
+                                setState(() {
+                                  _headers.removeAt(index);
+                                  _ensureEmptyHeaderRow();
+                                });
+                              },
+                      ),
                   ],
                 ),
               );
@@ -900,13 +938,21 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
                 ),
                 SegmentedButton<bool>(
                   segments: const [
-                    ButtonSegment(value: false, icon: Icon(Icons.raw_on)),
-                    ButtonSegment(value: true, icon: Icon(Icons.data_object)),
+                    ButtonSegment(
+                      value: false,
+                      icon: Icon(Icons.edit),
+                      label: Text('Edit'),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      icon: Icon(Icons.visibility),
+                      label: Text('Preview'),
+                    ),
                   ],
-                  selected: {_isJsonMode},
+                  selected: {_isPreviewMode},
                   onSelectionChanged: (set) => {
                     HapticFeedback.lightImpact(),
-                    setState(() => _isJsonMode = set.first),
+                    setState(() => _isPreviewMode = set.first),
                   },
                   showSelectedIcon: false,
                   style: SegmentedButton.styleFrom(
@@ -919,11 +965,16 @@ class _RequestComposerPageState extends State<RequestComposerPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: TextField(
-              controller: _bodyController,
+              controller: (widget.useFcmTemplate && !_isPreviewMode)
+                  ? _fcmDataController
+                  : _bodyController,
               maxLines: 12,
               minLines: 5,
+              readOnly: _isPreviewMode,
               decoration: InputDecoration(
-                hintText: 'Request Payload',
+                hintText: (widget.useFcmTemplate && !_isPreviewMode)
+                    ? 'Data Content'
+                    : 'Request Payload',
                 filled: true,
                 fillColor: Theme.of(
                   context,
